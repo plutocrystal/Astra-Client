@@ -1,0 +1,14 @@
+pluginManagement {
+    repositories {
+        maven {
+            name = 'Gradle Plugin'
+            url = 'https://maven.aliyun.com/repository/gradle-plugin'
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'Astra'
+
+gradle.ext.mod_version = 'B2.2.3'
