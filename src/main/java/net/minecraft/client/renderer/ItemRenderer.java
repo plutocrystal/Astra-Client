@@ -3,6 +3,8 @@ package net.minecraft.client.renderer;
 import dev.astra.Main;
 import dev.astra.event.events.EventRenderItem;
 import dev.astra.module.impl.render.Animations;
+import dev.astra.module.impl.render.LowFire;
+import dev.astra.module.impl.render.NoRender;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -363,7 +365,9 @@ public class ItemRenderer {
     public void renderOverlays(float partialTicks) {
         GlStateManager.disableAlpha();
 
-        if (this.mc.thePlayer.isEntityInsideOpaqueBlock()) {
+        boolean noRenderEnabled = Main.moduleManager != null && Main.moduleManager.getModuleByClass(NoRender.class) != null && Main.moduleManager.getModuleByClass(NoRender.class).isToggle();
+
+        if (!noRenderEnabled && this.mc.thePlayer.isEntityInsideOpaqueBlock()) {
             IBlockState iblockstate = this.mc.theWorld.getBlockState(new BlockPos(this.mc.thePlayer));
             BlockPos blockpos = new BlockPos(this.mc.thePlayer);
             EntityPlayer entityplayer = this.mc.thePlayer;
@@ -460,6 +464,10 @@ public class ItemRenderer {
     }
 
     private void renderFireInFirstPerson(float partialTicks) {
+        boolean lowFireEnabled = LowFire.INSTANCE != null && LowFire.INSTANCE.isToggle();
+        float fireHeight = lowFireEnabled ? LowFire.height.getValue().floatValue() : 0.3F;
+        if (lowFireEnabled && fireHeight <= 0.0F) return;
+
         Tessellator tessellator = Tessellator.getInstance();
         WorldRenderer worldrenderer = tessellator.getWorldRenderer();
         GlStateManager.color(1.0F, 1.0F, 1.0F, 0.9F);
@@ -482,7 +490,7 @@ public class ItemRenderer {
             float f7 = 0.0F - f / 2.0F;
             float f8 = f7 + f;
             float f9 = -0.5F;
-            GlStateManager.translate((float) (-(i * 2 - 1)) * 0.24F, -0.3F, 0.0F);
+            GlStateManager.translate((float) (-(i * 2 - 1)) * 0.24F, -fireHeight, 0.0F);
             GlStateManager.rotate((float) (i * 2 - 1) * 10.0F, 0.0F, 1.0F, 0.0F);
             worldrenderer.begin(7, DefaultVertexFormats.POSITION_TEX);
             worldrenderer.setSprite(textureatlassprite);

@@ -4,13 +4,19 @@ import dev.astra.event.EventHandler;
 import dev.astra.event.events.Render3DEvent;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
+import dev.astra.utils.rotation.RotationUtils;
 import dev.astra.value.impl.BooleanValue;
 import dev.astra.value.impl.NumberValue;
+import net.minecraft.block.material.Material;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.passive.EntityAnimal;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemSword;
+import net.minecraft.item.ItemTool;
+import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
 import org.lwjgl.input.Keyboard;
 
 import java.util.Comparator;
@@ -24,15 +30,43 @@ public class AimAssist extends Module {
     public final NumberValue fov = new NumberValue("FOV", 90.0, 15.0, 180.0, 5.0);
     public final BooleanValue throughWalls = new BooleanValue("ThroughWalls", false);
     public final BooleanValue smoothPitch = new BooleanValue("SmoothPitch", true);
+    public final BooleanValue clickAim = new BooleanValue("ClickAim", true);
+    public final BooleanValue weaponOnly = new BooleanValue("WeaponOnly", false);
+    public final BooleanValue breakBlocks = new BooleanValue("BreakBlocks", true);
+
+    private long lastClickTime = 0L;
 
     public AimAssist() {
         super("AimAssist", Keyboard.KEY_NONE, Category.COMBAT);
-        addValues(range, speed, fov, throughWalls, smoothPitch);
+        addValues(range, speed, fov, throughWalls, smoothPitch, clickAim, weaponOnly, breakBlocks);
     }
 
     @EventHandler
     public void onRender3D(Render3DEvent event) {
         if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        if (breakBlocks.getValue() && mc.gameSettings.keyBindAttack.isKeyDown() && mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
+            BlockPos pos = mc.objectMouseOver.getBlockPos();
+            if (pos != null && mc.theWorld.getBlockState(pos).getBlock().getMaterial() != Material.air) {
+                return;
+            }
+        }
+
+        if (clickAim.getValue()) {
+            if (mc.gameSettings.keyBindAttack.isKeyDown()) {
+                lastClickTime = System.currentTimeMillis();
+            }
+            if (System.currentTimeMillis() - lastClickTime > 200 && !mc.thePlayer.isSwingInProgress) {
+                return;
+            }
+        }
+
+        if (weaponOnly.getValue()) {
+            if (mc.thePlayer.getHeldItem() == null) return;
+            if (!(mc.thePlayer.getHeldItem().getItem() instanceof ItemSword) && !(mc.thePlayer.getHeldItem().getItem() instanceof ItemTool)) {
+                return;
+            }
+        }
 
         EntityLivingBase target = getTarget();
         if (target == null) return;
@@ -51,9 +85,14 @@ public class AimAssist extends Module {
         double smoothness = 1.0 - (speed.getValue() / 10.0);
         if (smoothness < 0) smoothness = 0;
 
-        mc.thePlayer.rotationYaw += yawDiff * (1.0 - smoothness);
+        float finalYaw = mc.thePlayer.rotationYaw + (float) (yawDiff * (1.0 - smoothness));
+        finalYaw = RotationUtils.applyGCD(finalYaw, mc.thePlayer.rotationYaw);
+        mc.thePlayer.rotationYaw = finalYaw;
+
         if (smoothPitch.getValue()) {
-            mc.thePlayer.rotationPitch += pitchDiff * (1.0 - smoothness);
+            float finalPitch = mc.thePlayer.rotationPitch + (float) (pitchDiff * (1.0 - smoothness));
+            finalPitch = RotationUtils.applyGCD(finalPitch, mc.thePlayer.rotationPitch);
+            mc.thePlayer.rotationPitch = finalPitch;
         }
     }
 

@@ -1,4 +1,3 @@
-
 package dev.astra.module.impl.combat;
 
 import dev.astra.event.EventHandler;
@@ -6,7 +5,7 @@ import dev.astra.event.events.Render3DEvent;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
 import dev.astra.value.impl.BooleanValue;
-import dev.astra.value.impl.NumberValue;
+import dev.astra.value.impl.RangeSelectionNumberValue;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.item.ItemSword;
 import org.lwjgl.input.Keyboard;
@@ -15,26 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class AutoClick extends Module {
 
-    public final NumberValue maxCps = new NumberValue("MaxCPS", 8.0, 1.0, 20.0, 1.0) {
-        @Override
-        public void setValue(Double value) {
-            super.setValue(value);
-            if (minCps != null && minCps.getValue() > this.getValue()) {
-                minCps.setValue(this.getValue());
-            }
-        }
-    };
-
-    public final NumberValue minCps = new NumberValue("MinCPS", 5.0, 1.0, 20.0, 1.0) {
-        @Override
-        public void setValue(Double value) {
-            super.setValue(value);
-            if (maxCps != null && maxCps.getValue() < this.getValue()) {
-                maxCps.setValue(this.getValue());
-            }
-        }
-    };
-
+    public final RangeSelectionNumberValue cps = new RangeSelectionNumberValue("CPS", 5.0, 8.0, 1.0, 20.0, 1.0);
     public final BooleanValue leftClick = new BooleanValue("LeftClick", true);
     public final BooleanValue onlySword = new BooleanValue("OnlySword", false);
 
@@ -43,7 +23,7 @@ public class AutoClick extends Module {
 
     public AutoClick() {
         super("AutoClick", Keyboard.KEY_NONE, Category.COMBAT);
-        addValues(maxCps, minCps, leftClick, onlySword);
+        addValues(cps, leftClick, onlySword);
     }
 
     @Override
@@ -73,8 +53,11 @@ public class AutoClick extends Module {
     }
 
     private long getRandomDelay() {
-        int min = (int) Math.min(minCps.getValue(), maxCps.getValue());
-        int max = (int) Math.max(minCps.getValue(), maxCps.getValue());
+        double minCps = cps.getMinValue();
+        double maxCps = cps.getMaxValue();
+        
+        int min = (int) Math.min(minCps, maxCps);
+        int max = (int) Math.max(minCps, maxCps);
         if (max <= 0) max = 1;
         if (min <= 0) min = 1;
         

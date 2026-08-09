@@ -11,4 +11,4 @@ pluginManagement {
 
 rootProject.name = 'Astra'
 
-gradle.ext.mod_version = 'B2.2.3'
+gradle.ext.mod_version = 'B2.2.8'

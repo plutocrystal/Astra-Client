@@ -1,6 +1,8 @@
 package net.minecraft.client;
 
 import dev.astra.Main;
+import dev.astra.module.impl.exploit.MultiActions;
+import dev.astra.module.impl.render.NoToasts;
 import de.florianmichael.viamcp.fixes.AttackOrder;
 import dev.astra.event.EventManager;
 import com.google.common.collect.*;
@@ -840,7 +842,9 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
             this.prevFrameTime = System.nanoTime();
         }
 
-        this.guiAchievement.updateAchievementWindow();
+        if (NoToasts.INSTANCE == null || !NoToasts.INSTANCE.isToggle()) {
+            this.guiAchievement.updateAchievementWindow();
+        }
         this.framebufferMc.unbindFramebuffer();
         GlStateManager.popMatrix();
         GlStateManager.pushMatrix();
@@ -1103,7 +1107,7 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
             this.leftClickCounter = 0;
         }
 
-        boolean allowMultiAction = dev.astra.Main.moduleManager != null && dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.player.MultiActions.class) != null && dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.player.MultiActions.class).isToggle();
+        boolean allowMultiAction = dev.astra.Main.moduleManager != null && dev.astra.Main.moduleManager.getModuleByClass(MultiActions.class) != null && dev.astra.Main.moduleManager.getModuleByClass(MultiActions.class).isToggle();
 
         if (this.leftClickCounter <= 0 && (allowMultiAction || !this.thePlayer.isUsingItem())) {
             if (leftClick && this.objectMouseOver != null && this.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
@@ -1120,6 +1124,10 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
     }
 
     public void clickMouse() {
+        if (dev.astra.module.impl.misc.Fixes.INSTANCE != null && dev.astra.module.impl.misc.Fixes.INSTANCE.isToggle() && dev.astra.module.impl.misc.Fixes.INSTANCE.hitDelayFix.getValue()) {
+            this.leftClickCounter = 0;
+        }
+
         if (this.leftClickCounter <= 0) {
             AttackOrder.sendConditionalSwing(this.objectMouseOver);
 

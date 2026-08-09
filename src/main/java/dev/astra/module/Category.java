@@ -7,5 +7,6 @@ public enum Category {
     WORLD,
     RENDER,
     MISC,
+    EXPLOIT,
     FUN
 }

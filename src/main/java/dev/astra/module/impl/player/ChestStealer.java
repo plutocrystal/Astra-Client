@@ -5,7 +5,7 @@ import dev.astra.event.events.EventPreUpdate;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
 import dev.astra.value.impl.BooleanValue;
-import dev.astra.value.impl.NumberValue;
+import dev.astra.value.impl.RangeSelectionNumberValue;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.MapColor;
 import net.minecraft.block.material.Material;
@@ -29,8 +29,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class ChestStealer extends Module {
 
-    public final NumberValue startDelay = new NumberValue("StartDelay", 200.0, 0.0, 1000.0, 1.0);
-    public final NumberValue delay = new NumberValue("Delay", 100.0, 0.0, 400.0, 1.0);
+    public final RangeSelectionNumberValue startDelay = new RangeSelectionNumberValue("StartDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
+    public final RangeSelectionNumberValue delay = new RangeSelectionNumberValue("Delay", 50.0, 150.0, 0.0, 400.0, 1.0);
     public final BooleanValue random = new BooleanValue("Random", false);
     public final BooleanValue intelligent = new BooleanValue("Intelligent", true);
     public final BooleanValue autoClose = new BooleanValue("AutoClose", true);
@@ -48,7 +48,11 @@ public class ChestStealer extends Module {
     @EventHandler
     public void onPreUpdate(EventPreUpdate event) {
         if (mc.currentScreen instanceof GuiChest) {
-            if (System.currentTimeMillis() - lastStart >= startDelay.getValue().longValue() + ThreadLocalRandom.current().nextLong(-35, 35)) {
+            long startDelayMin = (long) startDelay.getMinValue();
+            long startDelayMax = (long) startDelay.getMaxValue();
+            long currentStartDelay = ThreadLocalRandom.current().nextLong(startDelayMin, startDelayMax + 1) + ThreadLocalRandom.current().nextLong(-35, 35);
+
+            if (System.currentTimeMillis() - lastStart >= currentStartDelay) {
                 ArrayList<Integer> itemPos = new ArrayList<>();
                 GuiChest chest = (GuiChest) mc.currentScreen;
                 for (int i = 0; i < chest.inventorySlots.inventorySlots.size() - 36; i++) {
@@ -66,13 +70,18 @@ public class ChestStealer extends Module {
                 if (random.getValue()) {
                     Collections.shuffle(itemPos);
                 }
-                if (System.currentTimeMillis() - lastSteal >= delay.getValue().longValue() + ThreadLocalRandom.current().nextLong(-35, 55)) {
+                
+                long delayMin = (long) delay.getMinValue();
+                long delayMax = (long) delay.getMaxValue();
+                long currentDelay = ThreadLocalRandom.current().nextLong(delayMin, delayMax + 1) + ThreadLocalRandom.current().nextLong(-35, 55);
+                
+                if (System.currentTimeMillis() - lastSteal >= currentDelay) {
                     boolean found = false;
                     for (Integer pos : itemPos) {
                         stealItem(pos);
                         lastItemPos = pos;
                         found = true;
-                        if (delay.getValue() != 0.0) break;
+                        if (currentDelay != 0.0) break;
                     }
                     if (!found && autoClose.getValue()) {
                         lastStart = System.currentTimeMillis();

@@ -529,7 +529,6 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             this.prevRenderArmYaw = this.renderArmYaw;
             this.prevRenderArmPitch = this.renderArmPitch;
 
-            // 修复手到处偏移：第一人称手臂渲染永远跟随玩家真实的屏幕视角
             float targetYaw = realYaw;
             float targetPitch = realPitch;
 

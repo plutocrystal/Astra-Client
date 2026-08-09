@@ -1,5 +1,8 @@
 package net.minecraft.entity;
 
+import dev.astra.Main;
+import dev.astra.module.impl.exploit.NoPitchLimit;
+import dev.astra.module.impl.player.NoPush;
 import net.minecraft.block.*;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -212,7 +215,7 @@ public abstract class Entity implements ICommandSender {
     }
 
     public void setAngles(float yaw, float pitch) {
-        boolean noPitchLimit = dev.astra.Main.moduleManager != null && dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.player.NoPitchLimit.class) != null && dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.player.NoPitchLimit.class).isToggle();
+        boolean noPitchLimit = Main.moduleManager != null && Main.moduleManager.getModuleByClass(NoPitchLimit.class) != null && Main.moduleManager.getModuleByClass(NoPitchLimit.class).isToggle();
 
         float f = this.rotationPitch;
         float f1 = this.rotationYaw;
@@ -933,6 +936,10 @@ public abstract class Entity implements ICommandSender {
     }
 
     public void applyEntityCollision(Entity entityIn) {
+        if (NoPush.INSTANCE != null && NoPush.INSTANCE.isToggle() && (this instanceof EntityPlayer || entityIn instanceof EntityPlayer)) {
+            return;
+        }
+
         if (entityIn.riddenByEntity != this && entityIn.ridingEntity != this) {
             if (!entityIn.noClip && !this.noClip) {
                 double d0 = entityIn.posX - this.posX;
@@ -1752,6 +1759,9 @@ public abstract class Entity implements ICommandSender {
     }
 
     public boolean isPushedByWater() {
+        if (NoPush.INSTANCE != null && NoPush.INSTANCE.isToggle() && this instanceof EntityPlayer) {
+            return false;
+        }
         return true;
     }
 

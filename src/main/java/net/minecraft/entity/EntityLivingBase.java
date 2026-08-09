@@ -4,6 +4,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Maps;
 import net.minecraft.block.Block;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -1517,6 +1518,9 @@ public abstract class EntityLivingBase extends Entity {
     }
 
     public Vec3 getLook(float partialTicks) {
+        if (this instanceof EntityPlayerSP && dev.astra.module.impl.misc.Fixes.INSTANCE != null && dev.astra.module.impl.misc.Fixes.INSTANCE.isToggle() && dev.astra.module.impl.misc.Fixes.INSTANCE.mouseDelayFix.getValue()) {
+            return super.getLook(partialTicks);
+        }
         if (partialTicks == 1.0F) {
             return this.getVectorForRotation(this.rotationPitch, this.rotationYawHead);
         } else {

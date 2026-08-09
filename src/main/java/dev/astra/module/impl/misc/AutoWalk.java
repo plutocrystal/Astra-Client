@@ -16,14 +16,12 @@ public class AutoWalk extends Module {
     @EventHandler
     public void onTick(TickEvent event) {
         if (mc.thePlayer == null) return;
-        // 模拟按下 W 键
         KeyBinding.setKeyBindState(mc.gameSettings.keyBindForward.getKeyCode(), true);
     }
 
     @Override
     public void onDisable() {
         super.onDisable();
-        // 关闭模块时，根据键盘实际状态恢复按键，防止关了模块还在走
         if (mc.thePlayer != null) {
             KeyBinding.setKeyBindState(mc.gameSettings.keyBindForward.getKeyCode(), Keyboard.isKeyDown(mc.gameSettings.keyBindForward.getKeyCode()));
         }
