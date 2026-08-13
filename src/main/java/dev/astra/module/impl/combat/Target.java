@@ -12,9 +12,10 @@ public class Target extends Module {
     public static BooleanValue animals = new BooleanValue("Animals", false);
     public static BooleanValue invisible = new BooleanValue("Invisible", false);
     public static BooleanValue dead = new BooleanValue("Dead", false);
+    public static BooleanValue friends = new BooleanValue("Friends", false);
 
     public Target() {
         super("Target", Keyboard.KEY_NONE, Category.COMBAT);
-        addValues(players, mobs, animals, invisible, dead);
+        addValues(players, mobs, animals, invisible, dead, friends);
     }
 }

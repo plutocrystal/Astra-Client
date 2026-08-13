@@ -23,7 +23,7 @@ public class Main {
     public static CommandManager commandManager;
 
     public static void start() {
-        Display.setTitle(NAME + " | " + VERSION);
+        Display.setTitle(NAME + VERSION);
 
         eventBus = new EventBus();
         moduleManager = new ModuleManager();

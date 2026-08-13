@@ -4,10 +4,8 @@
 import os
 import re
 
-# 中文字符正则：汉字 + 中文标点（如，。！？“”‘’等）
 CHINESE_PATTERN = re.compile(r'[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]')
 
-# 默认扫描的扩展名（可根据需要增删）
 TEXT_EXTENSIONS = {
     '.py', '.pyw', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp',
     '.h', '.hpp', '.cs', '.go', '.rs', '.swift', '.kt', '.scala',
@@ -24,17 +22,14 @@ def has_chinese(file_path):
                 if CHINESE_PATTERN.search(line):
                     return True
     except UnicodeDecodeError:
-        # 尝试其他常见编码或忽略错误
         try:
             with open(file_path, 'r', encoding='gbk', errors='ignore') as f:
                 for line in f:
                     if CHINESE_PATTERN.search(line):
                         return True
         except Exception:
-            # 无法解码则跳过（可能是二进制文件）
             pass
     except Exception:
-        # 其他读取错误跳过
         pass
     return False
 

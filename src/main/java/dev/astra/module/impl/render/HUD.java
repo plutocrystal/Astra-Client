@@ -42,7 +42,7 @@ public class HUD extends Module {
 
         List<Module> enabledModules = new ArrayList<>();
         for (Module mod : Main.moduleManager.getModules()) {
-            if (mod.isToggle() && !(mod instanceof HUD) && !(mod instanceof ClickGui)) {
+            if (mod.isToggle() && !mod.isHidden() && !(mod instanceof HUD) && !(mod instanceof ClickGui)) {
                 enabledModules.add(mod);
             }
         }

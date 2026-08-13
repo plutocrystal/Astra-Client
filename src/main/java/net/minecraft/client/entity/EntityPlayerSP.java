@@ -1,6 +1,7 @@
 package net.minecraft.client.entity;
 
 import dev.astra.Main;
+import dev.astra.module.impl.movement.NoSlow;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.MovingSoundMinecartRiding;
 import net.minecraft.client.audio.PositionedSoundRecord;
@@ -107,8 +108,37 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         dev.astra.Main.eventBus.post(preEvent);
         if (preEvent.isCancelled()) return;
 
+        float originalYaw = this.rotationYaw;
+        float originalPitch = this.rotationPitch;
+
+        float packetYaw = preEvent.getYaw();
+        float packetPitch = preEvent.getPitch();
+
         this.rotationYaw = preEvent.getYaw();
         this.rotationPitch = preEvent.getPitch();
+
+        if (dev.astra.utils.rotation.RotationManager.isActive()) {
+            switch (dev.astra.utils.rotation.RotationManager.getRotationMode()) {
+                case LockView:
+                    this.rotationYaw = dev.astra.utils.rotation.RotationManager.getYaw();
+                    this.rotationPitch = dev.astra.utils.rotation.RotationManager.getPitch();
+                    packetYaw = this.rotationYaw;
+                    packetPitch = this.rotationPitch;
+                    break;
+                case Silent:
+                    packetYaw = dev.astra.utils.rotation.RotationManager.getYaw();
+                    packetPitch = dev.astra.utils.rotation.RotationManager.getPitch();
+                    this.rotationYaw = originalYaw;
+                    this.rotationPitch = originalPitch;
+                    break;
+                case None:
+                default:
+                    packetYaw = this.rotationYaw;
+                    packetPitch = this.rotationPitch;
+                    break;
+            }
+        }
+
         this.posY = preEvent.getPosY();
         this.onGround = preEvent.isOnGround();
     
@@ -138,23 +168,23 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             double d0 = this.posX - this.lastReportedPosX;
             double d1 = this.getEntityBoundingBox().minY - this.lastReportedPosY;
             double d2 = this.posZ - this.lastReportedPosZ;
-            double d3 = this.rotationYaw - this.lastReportedYaw;
-            double d4 = this.rotationPitch - this.lastReportedPitch;
+            double d3 = packetYaw - this.lastReportedYaw;
+            double d4 = packetPitch - this.lastReportedPitch;
             boolean flag2 = d0 * d0 + d1 * d1 + d2 * d2 > 9.0E-4D || this.positionUpdateTicks >= 20;
             boolean flag3 = d3 != 0.0D || d4 != 0.0D;
 
             if (this.ridingEntity == null) {
                 if (flag2 && flag3) {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.posX, this.getEntityBoundingBox().minY, this.posZ, this.rotationYaw, this.rotationPitch, this.onGround));
+                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.posX, this.getEntityBoundingBox().minY, this.posZ, packetYaw, packetPitch, this.onGround));
                 } else if (flag2) {
                     this.sendQueue.addToSendQueue(new C03PacketPlayer.C04PacketPlayerPosition(this.posX, this.getEntityBoundingBox().minY, this.posZ, this.onGround));
                 } else if (flag3) {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(this.rotationYaw, this.rotationPitch, this.onGround));
+                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(packetYaw, packetPitch, this.onGround));
                 } else {
                     this.sendQueue.addToSendQueue(new C03PacketPlayer(this.onGround));
                 }
             } else {
-                this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.motionX, -999.0D, this.motionZ, this.rotationYaw, this.rotationPitch, this.onGround));
+                this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.motionX, -999.0D, this.motionZ, packetYaw, packetPitch, this.onGround));
                 flag2 = false;
             }
 
@@ -168,8 +198,8 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             }
 
             if (flag3) {
-                this.lastReportedYaw = this.rotationYaw;
-                this.lastReportedPitch = this.rotationPitch;
+                this.lastReportedYaw = packetYaw;
+                this.lastReportedPitch = packetPitch;
             }
             
             dev.astra.event.events.EventPostUpdate postEvent = new dev.astra.event.events.EventPostUpdate(this.rotationYaw, this.rotationPitch, this.posY, this.onGround);
@@ -204,11 +234,6 @@ public class EntityPlayerSP extends AbstractClientPlayer {
     }
 
     public void swingItem() {
-        if (mc.objectMouseOver != null && mc.objectMouseOver.entityHit != null) {
-            dev.astra.event.events.EventAttackEntity attackEvent = new dev.astra.event.events.EventAttackEntity(mc.objectMouseOver.entityHit);
-            dev.astra.Main.eventBus.post(attackEvent);
-        }
-        
         super.swingItem();
         this.sendQueue.addToSendQueue(new C0APacketAnimation());
     }
@@ -520,7 +545,7 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             this.moveForward = this.movementInput.moveForward;
             this.isJumping = this.movementInput.jump;
 
-            if (rotMgrActive && dev.astra.utils.rotation.RotationManager.getMoveFix() != dev.astra.utils.rotation.RotationManager.MoveFix.NONE) {
+            if (rotMgrActive && dev.astra.utils.rotation.RotationManager.getMoveFix() != dev.astra.utils.rotation.RotationManager.MoveFix.None) {
                 float[] fixed = dev.astra.utils.rotation.RotationManager.fixMovement(this.moveForward, this.moveStrafing, this.rotationYaw);
                 this.moveForward = fixed[0];
                 this.moveStrafing = fixed[1];
@@ -610,8 +635,10 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         this.movementInput.updatePlayerMoveState();
 
         if (this.isUsingItem() && !this.isRiding()) {
-            this.movementInput.moveStrafe *= 0.2F;
-            this.movementInput.moveForward *= 0.2F;
+            double mult = NoSlow.getSlowDownMultiplier(this.getHeldItem());
+
+            this.movementInput.moveStrafe *= (float) mult;
+            this.movementInput.moveForward *= (float) mult;
             this.sprintToggleTimer = 0;
         }
 

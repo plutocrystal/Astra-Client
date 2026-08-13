@@ -119,6 +119,7 @@ public class AimAssist extends Module {
 
         if (e instanceof EntityPlayer) {
             if (!Target.players.getValue()) return false;
+            if (!Target.friends.getValue() && dev.astra.utils.FriendManager.isFriend(e.getName())) return false;
         } else if (e instanceof EntityMob) {
             if (!Target.mobs.getValue()) return false;
         } else if (e instanceof EntityAnimal) {

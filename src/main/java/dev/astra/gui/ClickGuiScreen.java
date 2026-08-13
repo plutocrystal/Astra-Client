@@ -527,21 +527,40 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private void renderKeyAndHideSettings(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY) {
-        String keyName = selectedModule.getKeycode() == 0 ? "None" : Keyboard.getKeyName(selectedModule.getKeycode());
-        float keyWidth = mc.fontRendererObj.getStringWidth("Key: " + keyName);
+        float startX = posX + VALUE_AREA_OFFSET_X;
 
-        boolean isKeyHovered = isHovered(mouseX, mouseY, posX + VALUE_AREA_OFFSET_X, currentY + 1.0f, keyWidth, mc.fontRendererObj.FONT_HEIGHT);
+        String keyPrefix = "Key: ";
+        String keyValue = waitingForKey ? "..." : (selectedModule.getKeycode() == 0 ? "None" : Keyboard.getKeyName(selectedModule.getKeycode()));
+        float keyPrefixWidth = mc.fontRendererObj.getStringWidth(keyPrefix);
+        float keyValueWidth = mc.fontRendererObj.getStringWidth(keyValue);
+        float keyFullWidth = keyPrefixWidth + keyValueWidth;
+        boolean isKeyHovered = isHovered(mouseX, mouseY, startX, currentY + 1.0f, keyFullWidth, mc.fontRendererObj.FONT_HEIGHT);
 
         if (event == GuiEvent.DRAW) {
-            int hideTextColor = new Color(150, 150, 150).getRGB();
-            if (waitingForKey) {
-                mc.fontRendererObj.drawStringWithShadow("Key: ...", posX + VALUE_AREA_OFFSET_X, currentY + 1.0f, getGlobalColor().getRGB());
-            } else {
-                mc.fontRendererObj.drawStringWithShadow("Key: " + keyName, posX + VALUE_AREA_OFFSET_X, currentY + 1.0f, hideTextColor);
-            }
+            mc.fontRendererObj.drawStringWithShadow(keyPrefix, startX, currentY + 1.0f, COLOR_TEXT_PRIMARY.getRGB());
+            int keyValueColor = waitingForKey ? getGlobalColor().getRGB() : new Color(150, 150, 150).getRGB();
+            mc.fontRendererObj.drawStringWithShadow(keyValue, startX + keyPrefixWidth, currentY + 1.0f, keyValueColor);
         } else if (event == GuiEvent.CLICK) {
             if (isKeyHovered && mouseButton == 0) {
                 waitingForKey = !waitingForKey;
+            }
+        }
+
+        float hideX = startX + keyFullWidth + 25.0f;
+        String hidePrefix = "Hide: ";
+        String hideValue = selectedModule.isHidden() ? "true" : "false";
+        float hidePrefixWidth = mc.fontRendererObj.getStringWidth(hidePrefix);
+        float hideValueWidth = mc.fontRendererObj.getStringWidth(hideValue);
+        float hideFullWidth = hidePrefixWidth + hideValueWidth;
+        boolean isHideHovered = isHovered(mouseX, mouseY, hideX, currentY + 1.0f, hideFullWidth, mc.fontRendererObj.FONT_HEIGHT);
+
+        if (event == GuiEvent.DRAW) {
+            mc.fontRendererObj.drawStringWithShadow(hidePrefix, hideX, currentY + 1.0f, COLOR_TEXT_PRIMARY.getRGB());
+            int hideValueColor = selectedModule.isHidden() ? COLOR_ENABLED.getRGB() : COLOR_DISABLED.getRGB();
+            mc.fontRendererObj.drawStringWithShadow(hideValue, hideX + hidePrefixWidth, currentY + 1.0f, hideValueColor);
+        } else if (event == GuiEvent.CLICK) {
+            if (isHideHovered && mouseButton == 0) {
+                selectedModule.setHidden(!selectedModule.isHidden());
             }
         }
     }
@@ -647,7 +666,7 @@ public class ClickGuiScreen extends GuiScreen {
             float minX = sliderX + (float) (minPercent * SLIDER_WIDTH);
             float maxX = sliderX + (float) (maxPercent * SLIDER_WIDTH);
             float fillWidth = maxX - minX;
-            if (fillWidth < 2.0f) fillWidth = 2.0f; // 保证最小宽度，防止 min=max 时蓝色消失
+            if (fillWidth < 2.0f) fillWidth = 2.0f;
             
             drawRect(minX, sliderY, fillWidth, SLIDER_HEIGHT, getGlobalColor().getRGB());
 
@@ -659,13 +678,12 @@ public class ClickGuiScreen extends GuiScreen {
             mc.fontRendererObj.drawStringWithShadow(valueStr, textX, textY, COLOR_TEXT_PRIMARY.getRGB());
 
             if (currentDraggingRange == rangeValue) {
-                // 处理重叠时的拖拽方向决定
                 if (!rangeDragDirectionDecided && currentMin == currentMax) {
-                    if (mouseX > lastDragMouseX + 1) { // 往右拖
+                    if (mouseX > lastDragMouseX + 1) {
                         draggingRangeMax = true;
                         draggingRangeMin = false;
                         rangeDragDirectionDecided = true;
-                    } else if (mouseX < lastDragMouseX - 1) { // 往左拖
+                    } else if (mouseX < lastDragMouseX - 1) {
                         draggingRangeMin = true;
                         draggingRangeMax = false;
                         rangeDragDirectionDecided = true;
@@ -688,7 +706,6 @@ public class ClickGuiScreen extends GuiScreen {
                 float maxHandleX = sliderX + (float) (maxPercent * SLIDER_WIDTH);
 
                 if (currentMin == currentMax) {
-                    // 如果重叠，先不决定拖哪个，等鼠标移动了再决定
                     draggingRangeMin = false;
                     draggingRangeMax = false;
                     rangeDragDirectionDecided = false;

@@ -16,7 +16,7 @@ public class Deop extends Module {
 
     public final NumberValue speed = new NumberValue("Speed", 50.0, 1.0, 180.0, 1.0);
     public final NumberValue pitch = new NumberValue("Pitch", 90.0, -90.0, 90.0, 1.0);
-    public final ModeValue moveFix = new ModeValue("MoveFix", "STRICT", "NONE", "STRICT", "SILENT");
+    public final ModeValue moveFix = new ModeValue("MoveFix", "Strict", "None", "Strict", "Silent");
 
     private float currentYaw = 0.0f;
 
@@ -40,14 +40,14 @@ public class Deop extends Module {
 
         RotationManager.MoveFix fixMode;
         switch (moveFix.getValue()) {
-            case "STRICT":
-                fixMode = RotationManager.MoveFix.STRICT;
+            case "Strict":
+                fixMode = RotationManager.MoveFix.Strict;
                 break;
-            case "SILENT":
-                fixMode = RotationManager.MoveFix.SILENT;
+            case "Silent":
+                fixMode = RotationManager.MoveFix.Silent;
                 break;
             default:
-                fixMode = RotationManager.MoveFix.NONE;
+                fixMode = RotationManager.MoveFix.None;
                 break;
         }
 

@@ -53,7 +53,6 @@ public class SetValueCommand implements Command {
                 targetValue = value;
                 break;
             }
-            // 最后匹配忽略大小写的去空格内容
             if (valName.replace(" ", "").equalsIgnoreCase(combinedNoSpaces)) {
                 targetValue = value;
                 break;

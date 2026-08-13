@@ -14,6 +14,7 @@ public class Module {
     private int keycode;
     private Category category;
     private boolean toggle;
+    private boolean hidden = false;
     
     private final List<Value<?>> values = new ArrayList<>();
     
@@ -39,6 +40,8 @@ public class Module {
     public void setKeycode(int keycode) { this.keycode = keycode; }
     public Category getCategory() { return category; }
     public boolean isToggle() { return toggle; }
+    public boolean isHidden() { return hidden; }
+    public void setHidden(boolean hidden) { this.hidden = hidden; }
     
     public void toggle() {
         this.toggle = !this.toggle;

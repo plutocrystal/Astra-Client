@@ -20,20 +20,16 @@ public class Eagle extends Module {
     public void onPreUpdate(EventPreUpdate event) {
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
-        // 只要打开了任何GUI（如背包、聊天框），直接跳过所有逻辑，交给原版处理
         if (mc.currentScreen != null) {
             return;
         }
 
-        // 只有在手上拿着方块时才启用
         if (mc.thePlayer.getHeldItem() == null || !(mc.thePlayer.getHeldItem().getItem() instanceof ItemBlock)) {
             mc.gameSettings.keyBindSneak.pressed = Keyboard.isKeyDown(mc.gameSettings.keyBindSneak.getKeyCode());
             return;
         }
 
-        // 核心逻辑：玩家在地面上时，预测下一步的位置，如果下一步脚下是空气，就强制按下潜行键
         if (mc.thePlayer.onGround) {
-            // 预测下一刻的坐标，防止走太快冲出边缘
             double nextX = mc.thePlayer.posX + mc.thePlayer.motionX;
             double nextZ = mc.thePlayer.posZ + mc.thePlayer.motionZ;
             BlockPos pos = new BlockPos(nextX, mc.thePlayer.posY - 1.0, nextZ);
@@ -41,7 +37,6 @@ public class Eagle extends Module {
             
             mc.gameSettings.keyBindSneak.pressed = (blockUnder == Blocks.air);
         } else {
-            // 如果不在地面上（跳跃中等），恢复按键原状
             mc.gameSettings.keyBindSneak.pressed = Keyboard.isKeyDown(mc.gameSettings.keyBindSneak.getKeyCode());
         }
     }
@@ -49,7 +44,6 @@ public class Eagle extends Module {
     @Override
     public void onDisable() {
         super.onDisable();
-        // 关闭模块时，如果玩家没有物理按住Shift，则释放按键
         if (mc.gameSettings.keyBindSneak != null) {
             mc.gameSettings.keyBindSneak.pressed = Keyboard.isKeyDown(mc.gameSettings.keyBindSneak.getKeyCode());
         }

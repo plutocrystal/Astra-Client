@@ -1,224 +1,292 @@
 package dev.astra.module.impl.player;
 
+import dev.astra.Main;
 import dev.astra.event.EventHandler;
 import dev.astra.event.events.EventPreUpdate;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
+import dev.astra.util.ItemUtil;
+import dev.astra.util.RandomUtils;
 import dev.astra.value.impl.BooleanValue;
 import dev.astra.value.impl.RangeSelectionNumberValue;
-import net.minecraft.block.Block;
-import net.minecraft.block.material.MapColor;
-import net.minecraft.block.material.Material;
 import net.minecraft.client.gui.inventory.GuiChest;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.init.Items;
+import net.minecraft.inventory.ContainerChest;
+import net.minecraft.inventory.Slot;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemArmor;
-import net.minecraft.item.ItemAxe;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemBow;
-import net.minecraft.item.ItemFishingRod;
-import net.minecraft.item.ItemPickaxe;
+import net.minecraft.item.ItemFood;
+import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSpade;
 import net.minecraft.item.ItemSword;
-import net.minecraft.item.ItemTool;
-import net.minecraft.item.ItemStack;
-import org.lwjgl.input.Keyboard;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.List;
 
 public class ChestStealer extends Module {
+    private final RangeSelectionNumberValue delay = new RangeSelectionNumberValue("Delay", 50.0, 100.0, 0.0, 1000.0, 1.0);
+    private final RangeSelectionNumberValue openDelay = new RangeSelectionNumberValue("OpenDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
+    private final RangeSelectionNumberValue autoCloseDelay = new RangeSelectionNumberValue("AutoCloseDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
+    private final BooleanValue random = new BooleanValue("Random", false);
+    private final BooleanValue delayOnOpen = new BooleanValue("DelayOnOpen", true);
+    private final BooleanValue stealBadPotion = new BooleanValue("StealBadPotion", false);
+    private final BooleanValue smartSort = new BooleanValue("SmartSort", true);
 
-    public final RangeSelectionNumberValue startDelay = new RangeSelectionNumberValue("StartDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
-    public final RangeSelectionNumberValue delay = new RangeSelectionNumberValue("Delay", 50.0, 150.0, 0.0, 400.0, 1.0);
-    public final BooleanValue random = new BooleanValue("Random", false);
-    public final BooleanValue intelligent = new BooleanValue("Intelligent", true);
-    public final BooleanValue autoClose = new BooleanValue("AutoClose", true);
-    public final BooleanValue spamClick = new BooleanValue("SpamClick", true);
-
-    private long lastSteal = 0L;
-    private long lastStart = 0L;
-    private int lastItemPos = Integer.MIN_VALUE;
+    private long currentDelay;
+    private long lastStealTime;
+    private long openTime;
+    private long emptyTime;
+    private boolean wasOpen;
+    private long currentOpenDelay;
+    private long currentAutoCloseDelay;
+    private Slot currentTargetSlot;
+    private boolean firstAction;
 
     public ChestStealer() {
-        super("ChestStealer", Keyboard.KEY_NONE, Category.PLAYER);
-        addValues(startDelay, delay, random, intelligent, autoClose, spamClick);
+        super("ChestStealer", 0, Category.PLAYER);
+        addValues(delay, openDelay, autoCloseDelay, random, delayOnOpen, stealBadPotion, smartSort);
+    }
+
+    @Override
+    public void onEnable() {
+        super.onEnable();
+        resetState();
+    }
+
+    @Override
+    public void onDisable() {
+        super.onDisable();
+        resetState();
+    }
+
+    private void resetState() {
+        openTime = 0;
+        emptyTime = 0;
+        lastStealTime = 0;
+        currentDelay = 0;
+        currentOpenDelay = 0;
+        currentAutoCloseDelay = 0;
+        wasOpen = false;
+        currentTargetSlot = null;
+        firstAction = true;
+    }
+
+    private String getSortType(int slot) {
+        if (Main.moduleManager == null) return "None";
+        InvManager inv = Main.moduleManager.getModuleByClass(InvManager.class);
+        if (inv == null || !inv.isToggle()) return "None";
+        return inv.getSortType(slot);
+    }
+
+    private int findSortSlot(ItemStack stack) {
+        if (stack == null) return -1;
+        String cat = ItemUtil.getCategory(stack);
+        for (int i = 0; i < 9; i++) {
+            if (getSortType(i).equals(cat)) return i;
+        }
+        return -1;
+    }
+
+    private int findTrashSlot() {
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
+            if (stack == null) continue;
+            Item item = stack.getItem();
+            if (item instanceof ItemSpade) return i;
+            if (!ItemUtil.isUseful(stack)) return i;
+            if (item == Items.potionitem && ItemUtil.isBadPotion(stack)) return i;
+        }
+        return -1;
+    }
+
+    private int findEmptyHotbarSlot() {
+        for (int i = 0; i < 9; i++) {
+            if (mc.thePlayer.inventory.getStackInSlot(i) == null) return i;
+        }
+        return -1;
     }
 
     @EventHandler
     public void onPreUpdate(EventPreUpdate event) {
-        if (mc.currentScreen instanceof GuiChest) {
-            long startDelayMin = (long) startDelay.getMinValue();
-            long startDelayMax = (long) startDelay.getMaxValue();
-            long currentStartDelay = ThreadLocalRandom.current().nextLong(startDelayMin, startDelayMax + 1) + ThreadLocalRandom.current().nextLong(-35, 35);
+        if (mc.thePlayer == null || mc.theWorld == null) return;
 
-            if (System.currentTimeMillis() - lastStart >= currentStartDelay) {
-                ArrayList<Integer> itemPos = new ArrayList<>();
-                GuiChest chest = (GuiChest) mc.currentScreen;
-                for (int i = 0; i < chest.inventorySlots.inventorySlots.size() - 36; i++) {
-                    ItemStack itemStack = chest.inventorySlots.getSlot(i).getStack();
-                    if (itemStack != null) {
-                        if (intelligent.getValue()) {
-                            if (isBestChestItem(itemStack) && isBestItem(itemStack)) {
-                                itemPos.add(i);
+        if (mc.thePlayer.openContainer instanceof ContainerChest && mc.currentScreen instanceof GuiChest) {
+            ContainerChest chest = (ContainerChest) mc.thePlayer.openContainer;
+
+            if (!wasOpen) {
+                openTime = System.currentTimeMillis();
+                wasOpen = true;
+                currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
+                currentOpenDelay = (long) RandomUtils.nextDouble(openDelay.getMinValue(), openDelay.getMaxValue());
+                currentAutoCloseDelay = (long) RandomUtils.nextDouble(autoCloseDelay.getMinValue(), autoCloseDelay.getMaxValue());
+                lastStealTime = System.currentTimeMillis();
+                firstAction = true;
+            }
+
+            if (System.currentTimeMillis() - openTime < currentOpenDelay) {
+                return;
+            }
+
+            List<Slot> validSlots = new ArrayList<>();
+            int chestSize = chest.getLowerChestInventory().getSizeInventory();
+            for (int i = 0; i < chestSize; i++) {
+                Slot slot = chest.getSlot(i);
+                if (slot.getHasStack() && shouldSteal(slot.getStack())) {
+                    validSlots.add(slot);
+                }
+            }
+
+            if (validSlots.isEmpty()) {
+                if (emptyTime == 0) {
+                    emptyTime = System.currentTimeMillis();
+                }
+                if (System.currentTimeMillis() - emptyTime >= currentAutoCloseDelay) {
+                    mc.thePlayer.closeScreen();
+                    wasOpen = false;
+                }
+            } else {
+                emptyTime = 0;
+
+                if (currentTargetSlot == null || !currentTargetSlot.getHasStack() || !validSlots.contains(currentTargetSlot)) {
+                    if (random.isEnabled()) {
+                        RandomUtils.shuffle(validSlots);
+                    }
+                    currentTargetSlot = validSlots.get(0);
+                }
+                Slot targetSlot = currentTargetSlot;
+
+                if (!delayOnOpen.isEnabled() || !firstAction) {
+                    if (System.currentTimeMillis() - lastStealTime < currentDelay) return;
+                }
+
+                if (smartSort.isEnabled()) {
+                    int hotbarSlot = findSortSlot(targetSlot.getStack());
+                    if (hotbarSlot != -1) {
+                        ItemStack current = mc.thePlayer.inventory.getStackInSlot(hotbarSlot);
+                        if (current == null) {
+                            mc.playerController.windowClick(chest.windowId, targetSlot.slotNumber, hotbarSlot, 2, mc.thePlayer);
+                            lastStealTime = System.currentTimeMillis();
+                            currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
+                            currentTargetSlot = null;
+                            firstAction = false;
+                            return;
+                        }
+                        if (ItemUtil.getCategory(current).equals(ItemUtil.getCategory(targetSlot.getStack()))) {
+                            double score1 = ItemUtil.getItemScore(targetSlot.getStack());
+                            double score2 = ItemUtil.getItemScore(current);
+                            if (score1 > score2 || (score1 == score2 && (targetSlot.getStack().getMaxDamage() - targetSlot.getStack().getItemDamage()) > (current.getMaxDamage() - current.getItemDamage()))) {
+                                mc.playerController.windowClick(chest.windowId, targetSlot.slotNumber, hotbarSlot, 2, mc.thePlayer);
+                                lastStealTime = System.currentTimeMillis();
+                                currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
+                                currentTargetSlot = null;
+                                firstAction = false;
+                                return;
                             }
-                        } else {
-                            itemPos.add(i);
+                        }
+                    }
+
+                    AutoArmor autoArmor = Main.moduleManager.getModuleByClass(AutoArmor.class);
+                    if (autoArmor != null && autoArmor.isToggle() && autoArmor.hotbar.isEnabled()) {
+                        ItemStack chestStack = targetSlot.getStack();
+                        if (chestStack.getItem() instanceof ItemArmor) {
+                            int armorType = ((ItemArmor) chestStack.getItem()).armorType;
+                            int armorInvIndex = 3 - armorType;
+                            ItemStack worn = mc.thePlayer.inventory.armorItemInSlot(armorInvIndex);
+                            if (worn == null || ItemUtil.getArmorScore(chestStack) > ItemUtil.getArmorScore(worn) ||
+                                (ItemUtil.getArmorScore(chestStack) == ItemUtil.getArmorScore(worn) &&
+                                 (chestStack.getMaxDamage() - chestStack.getItemDamage()) > (worn.getMaxDamage() - worn.getItemDamage()))) {
+                                int trashSlot = findTrashSlot();
+                                if (trashSlot != -1) {
+                                    mc.playerController.windowClick(chest.windowId, targetSlot.slotNumber, trashSlot, 2, mc.thePlayer);
+                                    lastStealTime = System.currentTimeMillis();
+                                    currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
+                                    currentTargetSlot = null;
+                                    firstAction = false;
+                                    return;
+                                }
+                                int emptySlot = findEmptyHotbarSlot();
+                                if (emptySlot != -1) {
+                                    mc.playerController.windowClick(chest.windowId, targetSlot.slotNumber, emptySlot, 2, mc.thePlayer);
+                                    lastStealTime = System.currentTimeMillis();
+                                    currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
+                                    currentTargetSlot = null;
+                                    firstAction = false;
+                                    return;
+                                }
+                            }
                         }
                     }
                 }
-                if (random.getValue()) {
-                    Collections.shuffle(itemPos);
-                }
-                
-                long delayMin = (long) delay.getMinValue();
-                long delayMax = (long) delay.getMaxValue();
-                long currentDelay = ThreadLocalRandom.current().nextLong(delayMin, delayMax + 1) + ThreadLocalRandom.current().nextLong(-35, 55);
-                
-                if (System.currentTimeMillis() - lastSteal >= currentDelay) {
-                    boolean found = false;
-                    for (Integer pos : itemPos) {
-                        stealItem(pos);
-                        lastItemPos = pos;
-                        found = true;
-                        if (currentDelay != 0.0) break;
-                    }
-                    if (!found && autoClose.getValue()) {
-                        lastStart = System.currentTimeMillis();
-                        mc.thePlayer.closeScreen();
-                    }
-                } else if (lastItemPos != Integer.MIN_VALUE && spamClick.getValue()) {
-                    mc.playerController.windowClick(chest.inventorySlots.windowId, lastItemPos, 0, 1, mc.thePlayer);
-                }
+
+                mc.playerController.windowClick(chest.windowId, targetSlot.slotNumber, 0, 1, mc.thePlayer);
+                lastStealTime = System.currentTimeMillis();
+                currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
+                currentTargetSlot = null;
+                firstAction = false;
             }
         } else {
-            lastStart = System.currentTimeMillis();
-            lastItemPos = Integer.MIN_VALUE;
+            resetState();
         }
     }
 
-    public boolean isBestChestItem(ItemStack itemStack) {
-        if (itemStack.getItem() instanceof ItemSword || itemStack.getItem() instanceof ItemBow || itemStack.getItem() instanceof ItemArmor || itemStack.getItem() instanceof ItemAxe || itemStack.getItem() instanceof ItemPickaxe || itemStack.getItem() instanceof ItemSpade || itemStack.getItem() instanceof ItemFishingRod) {
-            GuiChest chest = (GuiChest) mc.currentScreen;
-            for (int i = 0; i < chest.inventorySlots.inventorySlots.size() - 36; i++) {
-                ItemStack chestItem = chest.inventorySlots.getSlot(i).getStack();
-                if (chestItem != null) {
-                    if (itemStack.getItem() instanceof ItemSword && chestItem.getItem() instanceof ItemSword) {
-                        if (getDamageSword(itemStack) < getDamageSword(chestItem)) return false;
-                    } else if (itemStack.getItem() instanceof ItemBow && chestItem.getItem() instanceof ItemBow) {
-                        if (getDamageBow(itemStack) < getDamageBow(chestItem)) return false;
-                    } else if (itemStack.getItem() instanceof ItemArmor && chestItem.getItem() instanceof ItemArmor) {
-                        if (((ItemArmor) itemStack.getItem()).armorType == ((ItemArmor) chestItem.getItem()).armorType && getDamageReduceAmount(itemStack) < getDamageReduceAmount(chestItem))
-                            return false;
-                    } else if (itemStack.getItem() instanceof ItemFishingRod && chestItem.getItem() instanceof ItemFishingRod) {
-                        if (getBestRod(itemStack) < getBestRod(chestItem)) return false;
-                    } else if (itemStack.getItem() instanceof ItemTool && chestItem.getItem() instanceof ItemTool && getToolSpeed(itemStack) < getToolSpeed(chestItem)) {
-                        return false;
+    private boolean shouldSteal(ItemStack stack) {
+        if (!ItemUtil.isUseful(stack)) return false;
+
+        Item item = stack.getItem();
+        if (item instanceof ItemSpade) return false;
+        if (item == Items.potionitem && ItemUtil.isBadPotion(stack) && !stealBadPotion.isEnabled()) return false;
+
+        if (item instanceof ItemArmor || item instanceof ItemSword || item instanceof ItemBow || ItemUtil.getToolScore(stack) > 0) {
+            if (item instanceof ItemArmor) {
+                ItemStack worn = mc.thePlayer.inventory.armorItemInSlot(3 - ((ItemArmor) item).armorType);
+                if (worn != null) {
+                    double score1 = ItemUtil.getItemScore(stack);
+                    double score2 = ItemUtil.getItemScore(worn);
+                    if (score1 < score2) return false;
+                    if (score1 == score2) {
+                        int dura1 = ItemUtil.getMaxDamage(stack) - ItemUtil.getDamage(stack);
+                        int dura2 = ItemUtil.getMaxDamage(worn) - ItemUtil.getDamage(worn);
+                        if (dura1 <= dura2) return false;
+                    }
+                }
+            }
+
+            for (int i = 0; i < 36; i++) {
+                ItemStack invStack = mc.thePlayer.inventory.getStackInSlot(i);
+                if (invStack != null) {
+                    boolean sameType = false;
+                    if (item instanceof ItemArmor && invStack.getItem() instanceof ItemArmor) {
+                        if (((ItemArmor) item).armorType == ((ItemArmor) invStack.getItem()).armorType) sameType = true;
+                    } else if (item instanceof ItemSword && invStack.getItem() instanceof ItemSword) {
+                        sameType = true;
+                    } else if (item instanceof ItemBow && invStack.getItem() instanceof ItemBow) {
+                        sameType = true;
+                    } else if (ItemUtil.isSameToolType(stack, invStack)) {
+                        sameType = true;
+                    }
+
+                    if (sameType) {
+                        double score1 = ItemUtil.getItemScore(stack);
+                        double score2 = ItemUtil.getItemScore(invStack);
+                        if (score1 < score2) return false;
+                        if (score1 == score2) {
+                            int dura1 = ItemUtil.getMaxDamage(stack) - ItemUtil.getDamage(stack);
+                            int dura2 = ItemUtil.getMaxDamage(invStack) - ItemUtil.getDamage(invStack);
+                            if (dura1 <= dura2) return false;
+                        }
                     }
                 }
             }
         }
+
+        InvManager invManager = Main.moduleManager.getModuleByClass(InvManager.class);
+        if (invManager != null && invManager.isToggle()) {
+            int currentCount = invManager.countItem(item);
+            if (invManager.isLimitExceeded(item, currentCount)) return false;
+        }
+
         return true;
-    }
-
-    public boolean isBestItem(ItemStack itemStack) {
-        if (itemStack.getItem() instanceof ItemSword || itemStack.getItem() instanceof ItemBow || itemStack.getItem() instanceof ItemArmor || itemStack.getItem() instanceof ItemAxe || itemStack.getItem() instanceof ItemPickaxe || itemStack.getItem() instanceof ItemSpade || itemStack.getItem() instanceof ItemFishingRod) {
-            for (int i = 0; i < mc.thePlayer.inventoryContainer.inventorySlots.size(); i++) {
-                ItemStack inventoryStack = mc.thePlayer.inventoryContainer.getSlot(i).getStack();
-                if (inventoryStack != null) {
-                    if (itemStack.getItem() instanceof ItemSword && inventoryStack.getItem() instanceof ItemSword) {
-                        if (getDamageSword(itemStack) <= getDamageSword(inventoryStack)) return false;
-                    } else if (itemStack.getItem() instanceof ItemBow && inventoryStack.getItem() instanceof ItemBow) {
-                        if (getDamageBow(itemStack) <= getDamageBow(inventoryStack)) return false;
-                    } else if (itemStack.getItem() instanceof ItemArmor && inventoryStack.getItem() instanceof ItemArmor) {
-                        if (((ItemArmor) itemStack.getItem()).armorType == ((ItemArmor) inventoryStack.getItem()).armorType && getDamageReduceAmount(itemStack) <= getDamageReduceAmount(inventoryStack))
-                            return false;
-                    } else if (itemStack.getItem() instanceof ItemFishingRod && inventoryStack.getItem() instanceof ItemFishingRod) {
-                        if (getBestRod(itemStack) <= getBestRod(inventoryStack)) return false;
-                    } else if (itemStack.getItem() instanceof ItemTool && inventoryStack.getItem() instanceof ItemTool && getToolSpeed(itemStack) <= getToolSpeed(inventoryStack)) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
-    }
-
-    private void stealItem(int slot) {
-        GuiChest chest = (GuiChest) mc.currentScreen;
-        mc.playerController.windowClick(chest.inventorySlots.windowId, slot, 0, 1, mc.thePlayer);
-        lastSteal = System.currentTimeMillis();
-    }
-
-    private double getDamageSword(ItemStack itemStack) {
-        double damage = 0.0;
-        if (itemStack.getItem() instanceof ItemSword) {
-            damage += ((ItemSword) itemStack.getItem()).getDamageVsEntity() + EnchantmentHelper.getEnchantmentLevel(Enchantment.sharpness.effectId, itemStack) * 1.25f;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.fireAspect.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.knockback.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.unbreaking.effectId, itemStack) / 11.0;
-            damage -= itemStack.getItemDamage() / 10000.0;
-        }
-        return damage;
-    }
-
-    private double getDamageBow(ItemStack itemStack) {
-        double damage = 0.0;
-        if (itemStack.getItem() instanceof ItemBow) {
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.flame.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.punch.effectId, itemStack) / 8.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.power.effectId, itemStack) / 8.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.infinity.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.unbreaking.effectId, itemStack) / 11.0;
-            damage -= itemStack.getItemDamage() / 10000.0;
-        }
-        return damage;
-    }
-
-    private double getToolSpeed(ItemStack itemStack) {
-        double damage = 0.0;
-        if (itemStack.getItem() instanceof ItemTool) {
-            if (itemStack.getItem() instanceof ItemAxe) {
-                damage += itemStack.getItem().getStrVsBlock(itemStack, new Block(Material.wood, MapColor.woodColor)) + EnchantmentHelper.getEnchantmentLevel(Enchantment.efficiency.effectId, itemStack);
-            } else if (itemStack.getItem() instanceof ItemPickaxe) {
-                damage += itemStack.getItem().getStrVsBlock(itemStack, new Block(Material.rock, MapColor.stoneColor)) + EnchantmentHelper.getEnchantmentLevel(Enchantment.efficiency.effectId, itemStack);
-            } else if (itemStack.getItem() instanceof ItemSpade) {
-                damage += itemStack.getItem().getStrVsBlock(itemStack, new Block(Material.sand, MapColor.sandColor)) + EnchantmentHelper.getEnchantmentLevel(Enchantment.efficiency.effectId, itemStack);
-            }
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.unbreaking.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.silkTouch.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.sharpness.effectId, itemStack) / 33.0;
-            damage -= itemStack.getItemDamage() / 10000.0;
-        }
-        return damage;
-    }
-
-    private double getDamageReduceAmount(ItemStack itemStack) {
-        double damageReduceAmount = 0.0;
-        if (itemStack.getItem() instanceof ItemArmor) {
-            damageReduceAmount += ((ItemArmor) itemStack.getItem()).damageReduceAmount + (6 + EnchantmentHelper.getEnchantmentLevel(Enchantment.protection.effectId, itemStack) * EnchantmentHelper.getEnchantmentLevel(Enchantment.protection.effectId, itemStack)) / 3.0f;
-            damageReduceAmount += EnchantmentHelper.getEnchantmentLevel(Enchantment.blastProtection.effectId, itemStack) / 11.0;
-            damageReduceAmount += EnchantmentHelper.getEnchantmentLevel(Enchantment.projectileProtection.effectId, itemStack) / 11.0;
-            damageReduceAmount += EnchantmentHelper.getEnchantmentLevel(Enchantment.fireProtection.effectId, itemStack) / 11.0;
-            damageReduceAmount += EnchantmentHelper.getEnchantmentLevel(Enchantment.unbreaking.effectId, itemStack) / 11.0;
-            damageReduceAmount += EnchantmentHelper.getEnchantmentLevel(Enchantment.thorns.effectId, itemStack) / 11.0;
-            damageReduceAmount += EnchantmentHelper.getEnchantmentLevel(Enchantment.featherFalling.effectId, itemStack) / 11.0;
-            if (((ItemArmor) itemStack.getItem()).armorType == 0 && ((ItemArmor) itemStack.getItem()).getArmorMaterial() == ItemArmor.ArmorMaterial.GOLD) {
-                damageReduceAmount -= 0.01;
-            }
-            damageReduceAmount -= itemStack.getItemDamage() / 10000.0;
-        }
-        return damageReduceAmount;
-    }
-
-    private double getBestRod(ItemStack itemStack) {
-        double damage = 0.0;
-        if (itemStack.getItem() instanceof ItemFishingRod) {
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.lure.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.unbreaking.effectId, itemStack) / 11.0;
-            damage += EnchantmentHelper.getEnchantmentLevel(Enchantment.luckOfTheSea.effectId, itemStack) / 33.0;
-            damage -= itemStack.getItemDamage() / 10000.0;
-        }
-        return damage;
     }
 }

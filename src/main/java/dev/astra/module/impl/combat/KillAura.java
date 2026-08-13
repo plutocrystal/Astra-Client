@@ -13,6 +13,7 @@ import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.passive.EntityAnimal;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
 import org.lwjgl.input.Keyboard;
 
 import java.util.Comparator;
@@ -21,14 +22,15 @@ import java.util.stream.Collectors;
 
 public class KillAura extends Module {
 
-    public final NumberValue range = new NumberValue("Range", 4.5, 1.0, 6.0, 0.1);
-    public final NumberValue fov = new NumberValue("FOV", 180.0, 15.0, 360.0, 5.0);
+    public final NumberValue range = new NumberValue("Range", 3.0, 1.0, 6.0, 0.1);
+    public final NumberValue fov = new NumberValue("FOV", 360.0, 15.0, 360.0, 5.0);
     public final BooleanValue throughWalls = new BooleanValue("ThroughWalls", false);
-    public final ModeValue moveFix = new ModeValue("MoveFix", "STRICT", "NONE", "STRICT", "SILENT");
+    public final ModeValue moveFix = new ModeValue("MoveFix", "Strict", "None", "Strict", "Silent");
+    public final ModeValue rotationMode = new ModeValue("RotationMode", "Silent", "None", "LockView", "Silent");
 
     public KillAura() {
         super("KillAura", Keyboard.KEY_R, Category.COMBAT);
-        addValues(range, fov, throughWalls, moveFix);
+        addValues(range, fov, throughWalls, moveFix, rotationMode);
     }
 
     @EventHandler
@@ -63,23 +65,45 @@ public class KillAura extends Module {
 
         RotationManager.MoveFix fixMode;
         switch (moveFix.getValue()) {
-            case "STRICT":
-                fixMode = RotationManager.MoveFix.STRICT;
+            case "Strict":
+                fixMode = RotationManager.MoveFix.Strict;
                 break;
-            case "SILENT":
-                fixMode = RotationManager.MoveFix.SILENT;
+            case "Silent":
+                fixMode = RotationManager.MoveFix.Silent;
                 break;
             default:
-                fixMode = RotationManager.MoveFix.NONE;
+                fixMode = RotationManager.MoveFix.None;
                 break;
         }
 
-        RotationManager.setRotation(targetYaw, targetPitch, fixMode);
+        RotationManager.RotationMode mode;
+        switch (rotationMode.getValue()) {
+            case "LockView":
+                mode = RotationManager.RotationMode.LockView;
+                break;
+            case "Silent":
+                mode = RotationManager.RotationMode.Silent;
+                break;
+            default:
+                mode = RotationManager.RotationMode.None;
+                break;
+        }
 
-        if (mc.thePlayer.getDistanceToEntity(target) <= range.getValue()) {
-            if (mc.leftClickCounter <= 0) {
-                mc.clickMouse();
+        RotationManager.setRotation(targetYaw, targetPitch, fixMode, mode);
+
+        mc.entityRenderer.getMouseOver(1.0F);
+
+        boolean canAttack = false;
+        if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.ENTITY && mc.objectMouseOver.entityHit == target) {
+            canAttack = true;
+        } else if (throughWalls.getValue() || mc.thePlayer.canEntityBeSeen(target)) {
+            if (mc.thePlayer.getDistanceToEntity(target) <= range.getValue()) {
+                canAttack = true;
             }
+        }
+
+        if (canAttack && mc.leftClickCounter <= 0) {
+            mc.clickMouse();
         }
     }
 
@@ -97,10 +121,11 @@ public class KillAura extends Module {
             return false;
         }
 
-        if (mc.thePlayer.getDistanceToEntity(e) > range.getValue()) return false;
+        if (mc.thePlayer.getDistanceToEntity(e) > range.getValue() + 2.0) return false;
 
         if (e instanceof EntityPlayer) {
             if (!Target.players.getValue()) return false;
+            if (!Target.friends.getValue() && dev.astra.utils.FriendManager.isFriend(e.getName())) return false;
         } else if (e instanceof EntityMob) {
             if (!Target.mobs.getValue()) return false;
         } else if (e instanceof EntityAnimal) {

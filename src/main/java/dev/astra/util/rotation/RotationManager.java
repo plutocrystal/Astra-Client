@@ -6,7 +6,11 @@ import net.minecraft.util.MathHelper;
 public class RotationManager {
 
     public enum MoveFix {
-        NONE, STRICT, SILENT
+        None, Strict, Silent
+    }
+
+    public enum RotationMode {
+        None, LockView, Silent
     }
 
     private static float serverYaw;
@@ -18,9 +22,14 @@ public class RotationManager {
     private static float prevBodyYaw;
     private static boolean initialized = false;
     public static boolean showVisual = false;
-    private static MoveFix moveFix = MoveFix.NONE;
+    private static MoveFix moveFix = MoveFix.None;
+    private static RotationMode rotationMode = RotationMode.Silent;
 
     public static void setRotation(float yaw, float pitch, MoveFix fix) {
+        setRotation(yaw, pitch, fix, RotationMode.Silent);
+    }
+
+    public static void setRotation(float yaw, float pitch, MoveFix fix, RotationMode mode) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) return;
 
@@ -44,6 +53,7 @@ public class RotationManager {
         serverPitch = pitch;
         active = true;
         moveFix = fix;
+        rotationMode = mode;
 
         double d0 = MathHelper.wrapAngleTo180_double(serverYaw - bodyYaw);
         bodyYaw += d0 * 0.3D;
@@ -56,11 +66,12 @@ public class RotationManager {
     public static void clearRotation() {
         active = false;
         initialized = false;
-        moveFix = MoveFix.NONE;
+        moveFix = MoveFix.None;
+        rotationMode = RotationMode.Silent;
     }
 
     public static float[] fixMovement(float forward, float strafe, float visualYaw) {
-        if (!active || moveFix == MoveFix.NONE) {
+        if (!active || moveFix == MoveFix.None) {
             return new float[]{forward, strafe};
         }
 
@@ -84,6 +95,10 @@ public class RotationManager {
 
     public static MoveFix getMoveFix() {
         return moveFix;
+    }
+
+    public static RotationMode getRotationMode() {
+        return rotationMode;
     }
 
     public static float getYaw() {
