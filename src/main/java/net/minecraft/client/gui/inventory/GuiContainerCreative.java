@@ -295,7 +295,7 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
             int j = mouseY - this.guiTop;
 
             for (CreativeTabs creativetabs : CreativeTabs.creativeTabArray) {
-                if (this.func_147049_a(creativetabs, i, j)) {
+                if (creativetabs != null && this.func_147049_a(creativetabs, i, j)) {
                     return;
                 }
             }
@@ -310,7 +310,7 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
             int j = mouseY - this.guiTop;
 
             for (CreativeTabs creativetabs : CreativeTabs.creativeTabArray) {
-                if (this.func_147049_a(creativetabs, i, j)) {
+                if (creativetabs != null && this.func_147049_a(creativetabs, i, j)) {
                     this.setCurrentCreativeTab(creativetabs);
                     return;
                 }
@@ -442,7 +442,7 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
         super.drawScreen(mouseX, mouseY, partialTicks);
 
         for (CreativeTabs creativetabs : CreativeTabs.creativeTabArray) {
-            if (this.renderCreativeInventoryHoveringText(creativetabs, mouseX, mouseY)) {
+            if (creativetabs != null && this.renderCreativeInventoryHoveringText(creativetabs, mouseX, mouseY)) {
                 break;
             }
         }
@@ -467,7 +467,7 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
                     Enchantment enchantment = Enchantment.getEnchantmentById(map.keySet().iterator().next().intValue());
 
                     for (CreativeTabs creativetabs1 : CreativeTabs.creativeTabArray) {
-                        if (creativetabs1.hasRelevantEnchantmentType(enchantment.type)) {
+                        if (creativetabs1 != null && creativetabs1.hasRelevantEnchantmentType(enchantment.type)) {
                             creativetabs = creativetabs1;
                             break;
                         }
@@ -501,7 +501,7 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
         for (CreativeTabs creativetabs1 : CreativeTabs.creativeTabArray) {
             this.mc.getTextureManager().bindTexture(creativeInventoryTabs);
 
-            if (creativetabs1.getTabIndex() != selectedTabIndex) {
+            if (creativetabs1 != null && creativetabs1.getTabIndex() != selectedTabIndex) {
                 this.func_147051_a(creativetabs1);
             }
         }
@@ -537,10 +537,14 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
             j += i;
         }
 
-        if (p_147049_1_.isTabInFirstRow()) {
+        int row = p_147049_1_.getTabRow();
+
+        if (row == 0) {
             k = k - 32;
-        } else {
+        } else if (row == 1) {
             k = k + this.ySize;
+        } else {
+            k = k - 64;
         }
 
         return p_147049_2_ >= j && p_147049_2_ <= j + 28 && p_147049_3_ >= k && p_147049_3_ <= k + 32;
@@ -557,10 +561,14 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
             j += i;
         }
 
-        if (p_147052_1_.isTabInFirstRow()) {
+        int row = p_147052_1_.getTabRow();
+
+        if (row == 0) {
             k = k - 32;
-        } else {
+        } else if (row == 1) {
             k = k + this.ySize;
+        } else {
+            k = k - 64;
         }
 
         if (this.isPointInRegion(j + 3, k + 3, 23, 27, p_147052_2_, p_147052_3_)) {
@@ -573,7 +581,8 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
 
     protected void func_147051_a(CreativeTabs p_147051_1_) {
         boolean flag = p_147051_1_.getTabIndex() == selectedTabIndex;
-        boolean flag1 = p_147051_1_.isTabInFirstRow();
+        int row = p_147051_1_.getTabRow();
+        boolean flag1 = row == 0;
         int i = p_147051_1_.getTabColumn();
         int j = i * 28;
         int k = 0;
@@ -591,11 +600,13 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
             l += i;
         }
 
-        if (flag1) {
+        if (row == 0) {
             i1 = i1 - 28;
-        } else {
+        } else if (row == 1) {
             k += 64;
             i1 = i1 + (this.ySize - 4);
+        } else {
+            i1 = i1 - 56;
         }
 
         GlStateManager.disableLighting();
@@ -603,7 +614,7 @@ public class GuiContainerCreative extends InventoryEffectRenderer {
         this.zLevel = 100.0F;
         this.itemRender.zLevel = 100.0F;
         l = l + 6;
-        i1 = i1 + 8 + (flag1 ? 1 : -1);
+        i1 = i1 + 8 + (row != 1 ? 1 : -1);
         GlStateManager.enableLighting();
         GlStateManager.enableRescaleNormal();
         ItemStack itemstack = p_147051_1_.getIconItemStack();

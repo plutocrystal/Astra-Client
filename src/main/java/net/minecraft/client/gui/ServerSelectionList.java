@@ -2,6 +2,7 @@ package net.minecraft.client.gui;
 
 import com.google.common.collect.Lists;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.network.LanServerDetector;
 
@@ -55,6 +56,16 @@ public class ServerSelectionList extends GuiListExtended {
 
         for (int i = 0; i < p_148195_1_.countServers(); ++i) {
             this.serverListInternet.add(new ServerListEntryNormal(this.owner, p_148195_1_.getServerData(i)));
+        }
+    }
+
+    public void resetPings() {
+        for (ServerListEntryNormal serverlistentrynormal : this.serverListInternet) {
+            ServerData serverdata = serverlistentrynormal.getServerData();
+            serverdata.field_78841_f = false;
+            serverdata.pingToServer = 0L;
+            serverdata.serverMOTD = "";
+            serverdata.populationInfo = "";
         }
     }
 

@@ -100,11 +100,11 @@ public class GuiIngame extends Gui {
 
         ItemStack itemstack = this.mc.thePlayer.inventory.armorItemInSlot(3);
 
-        if (this.mc.gameSettings.thirdPersonView == 0 && itemstack != null && itemstack.getItem() == Item.getItemFromBlock(Blocks.pumpkin)) {
+        if (this.mc.gameSettings.thirdPersonView == 0 && itemstack != null && itemstack.getItem() == Item.getItemFromBlock(Blocks.pumpkin) && !dev.astra.module.impl.render.NoRender.hidePumpkinOverlay()) {
             this.renderPumpkinOverlay(scaledresolution);
         }
 
-        if (!this.mc.thePlayer.isPotionActive(Potion.confusion)) {
+        if (!this.mc.thePlayer.isPotionActive(Potion.confusion) && !dev.astra.module.impl.render.NoRender.hidePortalOverlay()) {
             float f = this.mc.thePlayer.prevTimeInPortal + (this.mc.thePlayer.timeInPortal - this.mc.thePlayer.prevTimeInPortal) * partialTicks;
 
             if (f > 0.0F) {
@@ -261,7 +261,10 @@ public class GuiIngame extends Gui {
         ScoreObjective scoreobjective1 = scoreobjective != null ? scoreobjective : scoreboard.getObjectiveInDisplaySlot(1);
 
         if (scoreobjective1 != null) {
-            this.renderScoreboard(scoreobjective1, scaledresolution);
+            dev.astra.module.impl.render.Scoreboard sbModule = dev.astra.module.impl.render.Scoreboard.INSTANCE;
+            if (!(sbModule != null && sbModule.isToggle() && sbModule.remove.isEnabled())) {
+                this.renderScoreboard(scoreobjective1, scaledresolution);
+            }
         }
 
         GlStateManager.enableBlend();
@@ -286,11 +289,16 @@ public class GuiIngame extends Gui {
         GlStateManager.disableLighting();
         GlStateManager.enableAlpha();
         
-        dev.astra.Main.eventBus.post(new dev.astra.event.events.Render2DEvent());
+        dev.astra.Main.eventBus.post(new dev.astra.event.events.render.Render2DEvent());
     }
 
     protected void renderTooltip(ScaledResolution sr, float partialTicks) {
         if (this.mc.getRenderViewEntity() instanceof EntityPlayer) {
+            dev.astra.event.events.render.RenderHotbarEvent hotbarEvent = new dev.astra.event.events.render.RenderHotbarEvent(sr, partialTicks);
+            dev.astra.Main.eventBus.post(hotbarEvent);
+            if (hotbarEvent.isCancelled()) {
+                return;
+            }
             GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             this.mc.getTextureManager().bindTexture(widgetsTexPath);
             EntityPlayer entityplayer = (EntityPlayer) this.mc.getRenderViewEntity();
@@ -470,11 +478,39 @@ public class GuiIngame extends Gui {
             i = Math.max(i, this.getFontRenderer().getStringWidth(s));
         }
 
+        dev.astra.module.impl.render.Scoreboard sbModule = dev.astra.module.impl.render.Scoreboard.INSTANCE;
+        boolean sbOn = sbModule != null && sbModule.isToggle();
+        boolean sbRounded = sbOn && sbModule.rounded.isEnabled();
+        String sbCustom = sbOn && sbModule.customBottom.isEnabled() ? dev.astra.util.ChatUtil.translateColorCodes(sbModule.bottomText.getValue()) : null;
+
+        if (sbCustom != null) {
+            i = Math.max(i, this.getFontRenderer().getStringWidth(sbCustom));
+        }
+
         int i1 = collection.size() * this.getFontRenderer().FONT_HEIGHT;
         int j1 = scaledRes.getScaledHeight() / 2 + i1 / 3;
         int k1 = 3;
         int l1 = scaledRes.getScaledWidth() - i - k1;
         int j = 0;
+
+        if (sbOn) {
+            dev.astra.module.impl.render.Scoreboard.updateDrag(scaledRes, l1 - 3, j1 - i1 - this.getFontRenderer().FONT_HEIGHT - 1, scaledRes.getScaledWidth() - k1 + 2, j1);
+            dev.astra.module.impl.render.Scoreboard.pushTransform();
+        }
+
+        if (sbRounded) {
+            int alpha = MathHelper.clamp_int((int) Math.round(sbModule.opacity.getValue().doubleValue() / 100.0D * 255.0D), 0, 255);
+
+            if (alpha > 0) {
+                int boardTop = j1 - i1 - this.getFontRenderer().FONT_HEIGHT - 1;
+                float boardLeft = l1 - 3;
+                float boardRight = scaledRes.getScaledWidth() - k1 + 2;
+                float radius = sbModule.radius.getValue().floatValue();
+                dev.astra.util.RenderUtil.drawRoundedRect(boardLeft, boardTop, boardRight, j1, radius, alpha << 24);
+                int headAlpha = Math.min(255, alpha + alpha / 5);
+                dev.astra.util.RenderUtil.drawRoundedRect(boardLeft, boardTop, boardRight, boardTop + this.getFontRenderer().FONT_HEIGHT + 1, radius, headAlpha << 24, true, true, false, false);
+            }
+        }
 
         for (Score score1 : collection) {
             ++j;
@@ -483,18 +519,22 @@ public class GuiIngame extends Gui {
             String s2 = EnumChatFormatting.RED + "" + score1.getScorePoints();
             int k = j1 - j * this.getFontRenderer().FONT_HEIGHT;
             int l = scaledRes.getScaledWidth() - k1 + 2;
-            
-            if (dev.astra.module.impl.render.Scoreboard.INSTANCE == null || !dev.astra.module.impl.render.Scoreboard.INSTANCE.isToggle()) {
+
+            if (!sbRounded) {
                 drawRect(l1 - 2, k, l, k + this.getFontRenderer().FONT_HEIGHT, 1342177280);
             }
-            
-            this.getFontRenderer().drawString(s1, l1, k, 553648127);
-            this.getFontRenderer().drawString(s2, l - this.getFontRenderer().getStringWidth(s2), k, 553648127);
+
+            if (sbCustom != null && j == 1) {
+                this.getFontRenderer().drawString(sbCustom, l1, k, 553648127);
+            } else {
+                this.getFontRenderer().drawString(s1, l1, k, 553648127);
+                this.getFontRenderer().drawString(s2, l - this.getFontRenderer().getStringWidth(s2), k, 553648127);
+            }
 
             if (j == collection.size()) {
                 String s3 = objective.getDisplayName();
-                
-                if (dev.astra.module.impl.render.Scoreboard.INSTANCE == null || !dev.astra.module.impl.render.Scoreboard.INSTANCE.isToggle()) {
+
+                if (!sbRounded) {
                     drawRect(l1 - 2, k - this.getFontRenderer().FONT_HEIGHT - 1, l, k - 1, 1610612736);
                     drawRect(l1 - 2, k - 1, l, k, 1342177280);
                 }
@@ -502,6 +542,12 @@ public class GuiIngame extends Gui {
                 this.getFontRenderer().drawString(s3, l1 + i / 2 - this.getFontRenderer().getStringWidth(s3) / 2, k - this.getFontRenderer().FONT_HEIGHT, 553648127);
             }
         }
+
+        if (sbOn) {
+            dev.astra.module.impl.render.Scoreboard.popTransform();
+        }
+
+        dev.astra.module.impl.render.Scoreboard.renderHighlight();
     }
 
     private void renderPlayerStats(ScaledResolution scaledRes) {
@@ -861,7 +907,7 @@ public class GuiIngame extends Gui {
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
-    private void renderHotbarItem(int index, int xPos, int yPos, float partialTicks, EntityPlayer player) {
+    public void renderHotbarItem(int index, int xPos, int yPos, float partialTicks, EntityPlayer player) {
         ItemStack itemstack = player.inventory.mainInventory[index];
 
         if (itemstack != null) {

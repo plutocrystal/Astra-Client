@@ -1,5 +1,6 @@
 package net.minecraft.entity.item;
 
+import dev.astra.module.impl.fun.CustomTNT;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.nbt.NBTTagCompound;
@@ -71,7 +72,13 @@ public class EntityTNTPrimed extends Entity {
 
     private void explode() {
         float f = 4.0F;
-        this.worldObj.createExplosion(this, this.posX, this.posY + (double) (this.height / 16.0F), this.posZ, f, true);
+        
+        if (CustomTNT.INSTANCE != null 
+                && CustomTNT.INSTANCE.isToggle()) {
+            f = CustomTNT.INSTANCE.power.getValue().floatValue();
+        }
+
+        this.worldObj.createExplosion(this, this.posX, this.posY + (double)(this.height / 16.0F), this.posZ, f, true);
     }
 
     protected void writeEntityToNBT(NBTTagCompound tagCompound) {

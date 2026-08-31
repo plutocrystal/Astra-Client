@@ -472,7 +472,7 @@ public class FontRenderer implements IResourceManagerReloadListener {
                 text = this.bidiReorder(text);
             }
 
-            if ((color & -67108864) == 0) {
+            if ((color & -16777216) == 0) {
                 color |= -16777216;
             }
 

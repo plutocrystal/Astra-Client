@@ -1,14 +1,13 @@
 package dev.astra.module.impl.misc;
 
 import dev.astra.event.EventHandler;
-import dev.astra.event.events.TickEvent;
+import dev.astra.event.events.misc.TickEvent;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
 import net.minecraft.client.settings.KeyBinding;
 import org.lwjgl.input.Keyboard;
 
 public class AutoMine extends Module {
-
     public AutoMine() {
         super("AutoMine", Keyboard.KEY_NONE, Category.MISC);
     }

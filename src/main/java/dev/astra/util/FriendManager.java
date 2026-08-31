@@ -1,14 +1,15 @@
-package dev.astra.utils;
+package dev.astra.util;
 
 import net.minecraft.client.Minecraft;
-
 import java.io.*;
 import java.util.HashSet;
 import java.util.Set;
 
 public class FriendManager {
     private static final File friendDir = new File(Minecraft.getMinecraft().mcDataDir, "Astra/Friend");
+
     private static final File friendFile = new File(friendDir, "friends.txt");
+
     private static final Set<String> friends = new HashSet<>();
 
     static {
@@ -71,5 +72,14 @@ public class FriendManager {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static java.util.List<String> getFriends() {
+        return new java.util.ArrayList<>(friends);
+    }
+
+    public static void clearFriends() {
+        friends.clear();
+        saveFriends();
     }
 }

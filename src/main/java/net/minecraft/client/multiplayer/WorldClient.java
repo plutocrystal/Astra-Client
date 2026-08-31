@@ -232,6 +232,8 @@ public class WorldClient extends World {
         Random random = new Random();
         ItemStack itemstack = this.mc.thePlayer.getHeldItem();
         boolean flag = this.mc.playerController.getCurrentGameType() == WorldSettings.GameType.CREATIVE && itemstack != null && Block.getBlockFromItem(itemstack.getItem()) == Blocks.barrier;
+        dev.astra.module.impl.render.TrueSight trueSight = dev.astra.Main.moduleManager != null ? dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.TrueSight.class) : null;
+        if (trueSight != null && trueSight.isToggle() && trueSight.barriers.isEnabled()) flag = true;
         BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
 
         for (int j = 0; j < 1000; ++j) {

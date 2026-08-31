@@ -50,7 +50,7 @@ jar {
     manifest {
     }
     from(zipTree('libs/minecraft/ViaVersion-5.11.0-downgraded.jar'))
-    from(zipTree('libs/minecraft/ViaRewind-4.1.3-downgraded.jar'))
+    from(zipTree('libs/minecraft/ViaRewind-4.1.4-SNAPSHOT-downgraded.jar'))
     from(zipTree('libs/minecraft/ViaBackwards-5.11.0-downgraded.jar'))
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

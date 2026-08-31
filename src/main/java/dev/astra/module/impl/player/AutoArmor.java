@@ -1,358 +1,484 @@
 package dev.astra.module.impl.player;
 
-import dev.astra.event.EventHandler;
-import dev.astra.event.events.EventPreUpdate;
+import dev.astra.Main;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
-import dev.astra.util.ItemUtil;
 import dev.astra.util.RandomUtils;
+import dev.astra.util.inventory.ArmorComparator;
+import dev.astra.util.inventory.LBInventoryManager;
+import dev.astra.util.inventory.LBInventoryUtils;
+import dev.astra.util.inventory.SilentHotbar;
+import dev.astra.util.inventory.StackExtensions;
+import dev.astra.util.inventory.TickedActions;
 import dev.astra.value.impl.BooleanValue;
-import dev.astra.value.impl.ModeValue;
+import dev.astra.value.impl.NumberValue;
 import dev.astra.value.impl.RangeSelectionNumberValue;
 import net.minecraft.client.gui.inventory.GuiInventory;
-import net.minecraft.item.ItemArmor;
+import net.minecraft.entity.EntityLiving;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
-import net.minecraft.network.play.client.C09PacketHeldItemChange;
-import net.minecraft.network.play.client.C0DPacketCloseWindow;
-import net.minecraft.network.play.client.C16PacketClientStatus;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class AutoArmor extends Module {
-    private final ModeValue mode = new ModeValue("Mode", "OpenInv", "OpenInv", "SpoofInv", "Basic");
-    private final BooleanValue noMove = new BooleanValue("NoMove", false);
-    private final BooleanValue delayOnOpen = new BooleanValue("DelayOnOpen", true);
+    private final RangeSelectionNumberValue delay =
+            new RangeSelectionNumberValue("Delay", 50.0, 50.0, 0.0, 1000.0, 1.0);
+
+    private final NumberValue minItemAge = new NumberValue("MinItemAge", 0, 0, 2000, 1);
+
+    public final BooleanValue invOpen = LBInventoryManager.invOpenValue;
+
+    public final BooleanValue simulateInventory = LBInventoryManager.simulateInventoryValue;
+
+    public final NumberValue postInventoryCloseDelay = LBInventoryManager.postInventoryCloseDelayValue;
+
+    public final BooleanValue autoClose = LBInventoryManager.autoCloseValue;
+
+    public final NumberValue startDelay = LBInventoryManager.startDelayValue;
+
+    public final NumberValue closeDelay = LBInventoryManager.closeDelayValue;
+
+    public final BooleanValue smartSwap = new BooleanValue("SmartSwap", true);
+
+    public final BooleanValue noMove = LBInventoryManager.noMoveValue;
+
+    public final BooleanValue noMoveAir = LBInventoryManager.noMoveAirValue;
+
+    public final BooleanValue noMoveGround = LBInventoryManager.noMoveGroundValue;
+
     public final BooleanValue hotbar = new BooleanValue("Hotbar", true);
-    public final BooleanValue hotbarSilent = new BooleanValue("HotbarSilent", false);
-    private final RangeSelectionNumberValue startDelay = new RangeSelectionNumberValue("StartDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
-    private final RangeSelectionNumberValue delay = new RangeSelectionNumberValue("Delay", 50.0, 100.0, 0.0, 1000.0, 1.0);
-    private final RangeSelectionNumberValue hotbarSwitchDelay = new RangeSelectionNumberValue("HotbarSwitchDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
-    private final RangeSelectionNumberValue hotbarEquipDelay = new RangeSelectionNumberValue("HotbarEquipDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
-    private final RangeSelectionNumberValue hotbarBackDelay = new RangeSelectionNumberValue("HotbarBackDelay", 100.0, 200.0, 0.0, 1000.0, 1.0);
 
-    private long currentDelay;
-    private long lastEquipTime;
-    private long guiOpenTime;
-    private long currentStartDelay;
-    private boolean spoofed;
-    private boolean wasGuiOpen = false;
-    private boolean firstAction = true;
-    public boolean isActing = false;
+    public final BooleanValue delayedSlotSwitch = new BooleanValue("DelayedSlotSwitch", true);
 
-    private int swapStep = 0;
-    private int swapArmorWindow = -1;
+    public final BooleanValue notInContainers = new BooleanValue("NotInContainers", false);
 
-    private int hotbarStep = 0;
-    private List<Integer> hotbarQueue = new ArrayList<>();
-    private int hotbarCurrentIdx = 0;
-    private int hotbarPrevSlot = -1;
-    private long hotbarNextTime = 0;
+    public final BooleanValue highlightSlot = LBInventoryManager.highlightSlotValue;
+
+    private static final int RES_ADVANCE = 0;
+
+    private static final int RES_WAIT = 1;
+
+    private static final int RES_ABORT = -1;
+
+    private int clickStage = 0;
+
+    private enum HotbarPhase { START, SCAN, FINAL_DELAY, AWAIT, RESET }
+
+    private HotbarPhase hotbarPhase = HotbarPhase.START;
+
+    private List<ItemStack> hotbarStacks = new ArrayList<>();
+
+    private int hotbarCursor = 0;
+
+    private boolean hasClickedHotbar = false;
+
+    private ArmorComparator.ArmorSet hotbarBestSet = null;
+
+    private enum InvPhase { START, SCAN_TYPE, RUN_SEQ, AWAIT }
+
+    private InvPhase invPhase = InvPhase.START;
+
+    private List<ItemStack> invStacks = new ArrayList<>();
+
+    private int invTypeCursor = 0;
+
+    private List<int[]> invSeq = new ArrayList<>();
+
+    private int invSeqCursor = 0;
 
     public AutoArmor() {
         super("AutoArmor", 0, Category.PLAYER);
-        addValues(mode, noMove, delayOnOpen, hotbar, hotbarSilent, startDelay, delay, hotbarSwitchDelay, hotbarEquipDelay, hotbarBackDelay);
-    }
-
-    @Override
-    public void onEnable() {
-        super.onEnable();
-        lastEquipTime = System.currentTimeMillis();
-        guiOpenTime = System.currentTimeMillis();
-        currentStartDelay = (long) RandomUtils.nextDouble(startDelay.getMinValue(), startDelay.getMaxValue());
-        currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
-        wasGuiOpen = false;
-        firstAction = true;
-        resetSwap();
-        resetHotbar();
+        addValues(delay, minItemAge,
+                invOpen, simulateInventory, postInventoryCloseDelay, autoClose, startDelay, closeDelay,
+                smartSwap, noMove, noMoveAir, noMoveGround, hotbar, delayedSlotSwitch, notInContainers,
+                highlightSlot);
     }
 
     @Override
     public void onDisable() {
         super.onDisable();
-        closeSpoof();
-        wasGuiOpen = false;
-        isActing = false;
-        resetSwap();
-        resetHotbar();
+        TickedActions.clearTicked(this);
+        resetFlows();
+        SilentHotbar.resetSlot(this, false);
+        LBInventoryManager.autoArmorCurrentSlot = -1;
+        LBInventoryManager.autoArmorLastSlot = -1;
     }
 
-    private void resetSwap() {
-        swapStep = 0;
-        swapArmorWindow = -1;
+    private void resetFlows() {
+        hotbarPhase = HotbarPhase.START;
+        invPhase = InvPhase.START;
+        hasClickedHotbar = false;
+        clickStage = 0;
+        hotbarCursor = 0;
+        invTypeCursor = 0;
+        invSeqCursor = 0;
+        invSeq = new ArrayList<>();
+        hotbarBestSet = null;
     }
 
-    private void resetHotbar() {
-        hotbarStep = 0;
-        hotbarQueue.clear();
-        hotbarCurrentIdx = 0;
-        hotbarPrevSlot = -1;
+    public void refreshVisibility() {
+        delayedSlotSwitch.setVisible(hotbar.isEnabled());
+        notInContainers.setVisible(hotbar.isEnabled());
     }
 
-    public boolean isBusy() {
-        return this.isToggle() && (isActing || swapStep > 0 || hotbarStep > 0 || (mc.thePlayer != null && mc.thePlayer.inventory.getItemStack() != null));
+    private boolean handleEvents() {
+        return isToggle() && mc.thePlayer != null && mc.theWorld != null;
     }
 
-    private boolean isMoving() {
-        return mc.thePlayer != null && (mc.thePlayer.movementInput.moveForward != 0 || mc.thePlayer.movementInput.moveStrafe != 0);
+    public boolean handleEventsPublic() {
+        return handleEvents();
     }
 
-    private void updateActionTime() {
-        lastEquipTime = System.currentTimeMillis();
-        currentDelay = (long) RandomUtils.nextDouble(delay.getMinValue(), delay.getMaxValue());
-        firstAction = false;
+    public boolean canEquipFromChest() {
+        return handleEvents() && hotbar.isEnabled() && !notInContainers.isEnabled();
     }
 
-    private int getDurability(ItemStack stack) {
-        if (stack == null) return 0;
-        return stack.getMaxDamage() - stack.getItemDamage();
-    }
-
-    private void switchToSlot(int slot) {
-        if (hotbarSilent.isEnabled()) {
-            mc.thePlayer.sendQueue.addToSendQueue(new C09PacketHeldItemChange(slot));
-        } else {
-            mc.thePlayer.inventory.currentItem = slot;
+    public void equipFromHotbarInChest(Integer hotbarIndex, ItemStack stack) {
+        if (hotbarIndex == null || hotbarIndex < 0 || !canEquipFromChest()) {
+            LBInventoryManager.autoArmorCurrentSlot = -1;
+            LBInventoryManager.autoArmorLastSlot = -1;
+            return;
         }
-    }
-
-    private void switchBack() {
-        if (hotbarPrevSlot != -1) {
-            switchToSlot(hotbarPrevSlot);
-        }
-    }
-
-    private void equipCurrentItem() {
-        if (hotbarSilent.isEnabled()) {
-            int slot = hotbarQueue.get(hotbarCurrentIdx);
-            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(slot);
+        LBInventoryManager.autoArmorCurrentSlot = hotbarIndex;
+        SilentHotbar.selectSlotSilently(this, hotbarIndex, null, true, false, true);
+        if (mc.thePlayer != null && mc.thePlayer.sendQueue != null) {
             mc.thePlayer.sendQueue.addToSendQueue(new C08PacketPlayerBlockPlacement(stack));
-        } else {
-            mc.rightClickMouse();
         }
     }
 
-    @EventHandler
-    public void onPreUpdate(EventPreUpdate event) {
-        if (mc.thePlayer == null || mc.theWorld == null) return;
-        if (mc.thePlayer.openContainer != mc.thePlayer.inventoryContainer) return;
+    private static final int OP_OK = 0;
 
-        if (noMove.isEnabled() && isMoving() && !(mc.currentScreen instanceof GuiInventory)) {
-            closeSpoof();
-            return;
+    private static final int OP_WAIT = 1;
+
+    private static final int OP_STOP = 2;
+
+    private int shouldOperate(boolean onlyHotbar) {
+        if (!handleEvents()) {
+            return OP_STOP;
         }
-
-        boolean isGuiOpen = mc.currentScreen instanceof GuiInventory || (mode.is("SpoofInv") && spoofed);
-        if (isGuiOpen && !wasGuiOpen) {
-            guiOpenTime = System.currentTimeMillis();
-            currentStartDelay = (long) RandomUtils.nextDouble(startDelay.getMinValue(), startDelay.getMaxValue());
-            wasGuiOpen = true;
-            firstAction = true;
-        } else if (!isGuiOpen && wasGuiOpen) {
-            wasGuiOpen = false;
+        if (!LBInventoryUtils.passedPostInventoryCloseDelay(postInventoryCloseDelay.getValue().intValue())) {
+            return OP_STOP;
         }
-
-        if (mode.is("OpenInv") || mode.is("SpoofInv")) {
-            if (System.currentTimeMillis() - guiOpenTime < currentStartDelay) {
-                return;
+        if (mc.playerController == null || !mc.playerController.getCurrentGameType().isSurvivalOrAdventure()) {
+            return OP_STOP;
+        }
+        if (mc.thePlayer.openContainer == null
+                || (mc.thePlayer.openContainer.windowId != 0 && (!onlyHotbar || notInContainers.isEnabled()))) {
+            return OP_STOP;
+        }
+        if (onlyHotbar) {
+            if (mc.currentScreen != null) {
+                return OP_STOP;
             }
+            return hotbar.isEnabled() ? OP_OK : OP_STOP;
         }
+        if (invOpen.isEnabled() && !(mc.currentScreen instanceof GuiInventory)) {
+            return OP_STOP;
+        }
+        if (LBInventoryManager.canClickInventory(true)) {
+            return OP_OK;
+        }
+        LBInventoryManager.delay(50);
+        return OP_WAIT;
+    }
 
-        isActing = false;
+    private long sampleDelay() {
+        double min = Math.max(0.0, delay.getMinValue());
+        double max = Math.max(min, delay.getMaxValue());
+        return (long) RandomUtils.nextDouble(min, max);
+    }
 
-        if (hotbarStep > 0) {
-            isActing = true;
-            if (System.currentTimeMillis() < hotbarNextTime) return;
-
-            if (hotbarStep == 1) {
-                if (hotbarCurrentIdx >= hotbarQueue.size()) {
-                    switchBack();
-                    hotbarNextTime = System.currentTimeMillis() + (long) RandomUtils.nextDouble(hotbarBackDelay.getMinValue(), hotbarBackDelay.getMaxValue());
-                    hotbarStep = 2;
-                    return;
-                }
-                int targetSlot = hotbarQueue.get(hotbarCurrentIdx);
-                ItemStack stackToEquip = mc.thePlayer.inventory.getStackInSlot(targetSlot);
-                if (stackToEquip == null || !(stackToEquip.getItem() instanceof ItemArmor)) {
-                    hotbarCurrentIdx++;
-                    return;
-                }
-                ItemArmor armor = (ItemArmor) stackToEquip.getItem();
-                int armorInvIndex = 3 - armor.armorType;
-                if (mc.thePlayer.inventory.armorItemInSlot(armorInvIndex) != null) {
-                    hotbarCurrentIdx++;
-                    return;
-                }
-                switchToSlot(targetSlot);
-                hotbarNextTime = System.currentTimeMillis() + (long) RandomUtils.nextDouble(hotbarSwitchDelay.getMinValue(), hotbarSwitchDelay.getMaxValue());
-                hotbarStep = 2;
-                return;
-            } else if (hotbarStep == 2) {
-                int targetSlot = hotbarQueue.get(hotbarCurrentIdx);
-                ItemStack stackToEquip = mc.thePlayer.inventory.getStackInSlot(targetSlot);
-                if (stackToEquip == null || !(stackToEquip.getItem() instanceof ItemArmor)) {
-                    hotbarCurrentIdx++;
-                    hotbarStep = 1;
-                    return;
-                }
-                equipCurrentItem();
-                hotbarNextTime = System.currentTimeMillis() + (long) RandomUtils.nextDouble(hotbarEquipDelay.getMinValue(), hotbarEquipDelay.getMaxValue());
-                hotbarStep = 3;
-                return;
-            } else if (hotbarStep == 3) {
-                hotbarCurrentIdx++;
-                if (hotbarCurrentIdx < hotbarQueue.size()) {
-                    int nextSlot = hotbarQueue.get(hotbarCurrentIdx);
-                    switchToSlot(nextSlot);
-                    hotbarNextTime = System.currentTimeMillis() + (long) RandomUtils.nextDouble(hotbarSwitchDelay.getMinValue(), hotbarSwitchDelay.getMaxValue());
-                    hotbarStep = 2;
-                } else {
-                    switchBack();
-                    hotbarNextTime = System.currentTimeMillis() + (long) RandomUtils.nextDouble(hotbarBackDelay.getMinValue(), hotbarBackDelay.getMaxValue());
-                    hotbarStep = 4;
-                }
-                return;
-            } else if (hotbarStep == 4) {
-                resetHotbar();
-                updateActionTime();
-                return;
+    private int doClick(int slot, int button, int mode) {
+        if (clickStage == 0) {
+            int op = shouldOperate(false);
+            if (op == OP_STOP) {
+                LBInventoryManager.autoArmorLastSlot = -1;
+                LBInventoryManager.autoArmorCurrentSlot = -1;
+                clickStage = 0;
+                return RES_ABORT;
             }
-        }
-
-        if (swapStep > 0) {
-            isActing = true;
-            if (System.currentTimeMillis() - lastEquipTime < currentDelay) return;
-            openSpoof();
-            if (swapStep == 1) {
-                mc.playerController.windowClick(0, swapArmorWindow, 0, 0, mc.thePlayer);
-                swapStep = 2;
-                updateActionTime();
-                return;
-            } else if (swapStep == 2) {
-                mc.playerController.windowClick(0, -999, 0, 0, mc.thePlayer);
-                resetSwap();
-                updateActionTime();
-                return;
+            if (op == OP_WAIT) {
+                return RES_WAIT;
             }
+            LBInventoryManager.autoArmorLastSlot = LBInventoryManager.autoArmorCurrentSlot;
+            LBInventoryManager.autoArmorCurrentSlot = slot;
+            if (simulateInventory.isEnabled() || invOpen.isEnabled()) {
+                LBInventoryUtils.setServerOpenInventory(true);
+            }
+            if (LBInventoryUtils.isFirstInventoryClick) {
+                LBInventoryUtils.isFirstInventoryClick = false;
+                LBInventoryManager.delay(startDelay.getValue().longValue());
+                clickStage = 1;
+                return RES_WAIT;
+            }
+            clickStage = 1;
         }
+        clickStage = 0;
+        TickedActions.clickNextTick(this, slot, button, mode, false,
+                mc.thePlayer.openContainer.windowId, null);
+        LBInventoryManager.markScheduled();
+        LBInventoryManager.delay(sampleDelay());
+        return RES_ADVANCE;
+    }
 
-        if (mc.thePlayer.inventory.getItemStack() != null) {
-            isActing = true;
-            for (int i = 0; i < 36; i++) {
-                if (mc.thePlayer.inventory.getStackInSlot(i) == null) {
-                    int slotClick = i < 9 ? i + 36 : i;
-                    mc.playerController.windowClick(0, slotClick, 0, 0, mc.thePlayer);
-                    updateActionTime();
-                    return;
+    public boolean equipFromHotbarStep() {
+        switch (hotbarPhase) {
+            case START: {
+                int op = shouldOperate(true);
+                if (op != OP_OK) {
+                    abortHotbarFlow();
+                    return true;
                 }
+                hotbarStacks.clear();
+                for (int i = 0; i < mc.thePlayer.openContainer.inventorySlots.size(); i++) {
+                    hotbarStacks.add(mc.thePlayer.openContainer.getSlot(i).getStack());
+                }
+                hotbarBestSet = ArmorComparator.getBestArmorSet(hotbarStacks, null);
+                if (hotbarBestSet == null) {
+                    abortHotbarFlow();
+                    return true;
+                }
+                hotbarCursor = 0;
+                hasClickedHotbar = false;
+                hotbarPhase = HotbarPhase.SCAN;
+                return false;
             }
-            mc.playerController.windowClick(0, -999, 0, 0, mc.thePlayer);
-            updateActionTime();
-            return;
-        }
-
-        if (!delayOnOpen.isEnabled() || !firstAction) {
-            if (System.currentTimeMillis() - lastEquipTime < currentDelay) return;
-        }
-
-        int bestSlot = -1;
-        double bestScore = -1;
-        int bestType = -1;
-
-        for (int i = 0; i < 36; i++) {
-            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
-            if (stack == null || !(stack.getItem() instanceof ItemArmor)) continue;
-
-            ItemArmor armor = (ItemArmor) stack.getItem();
-            int type = armor.armorType;
-            int armorInvIndex = 3 - type;
-
-            ItemStack worn = mc.thePlayer.inventory.armorItemInSlot(armorInvIndex);
-            double wornScore = ItemUtil.getArmorScore(worn);
-            double itemScore = ItemUtil.getArmorScore(stack);
-
-            boolean better;
-            if (worn == null) {
-                better = true;
-            } else if (itemScore > wornScore) {
-                better = true;
-            } else if (itemScore == wornScore) {
-                better = getDurability(stack) > getDurability(worn);
-            } else {
-                better = false;
-            }
-
-            if (better && itemScore > bestScore) {
-                bestScore = itemScore;
-                bestSlot = i;
-                bestType = type;
-            }
-        }
-
-        if (bestSlot != -1) {
-            isActing = true;
-            ItemArmor bestArmor = (ItemArmor) mc.thePlayer.inventory.getStackInSlot(bestSlot).getItem();
-            int bestArmorInvIndex = 3 - bestArmor.armorType;
-            boolean wornEmpty = mc.thePlayer.inventory.armorItemInSlot(bestArmorInvIndex) == null;
-
-            if (hotbar.isEnabled() && bestSlot < 9 && wornEmpty && !(mc.currentScreen instanceof GuiInventory)) {
-                hotbarQueue.clear();
-                for (int i = 0; i < 9; i++) {
-                    ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
-                    if (stack == null || !(stack.getItem() instanceof ItemArmor)) continue;
-                    ItemArmor armor = (ItemArmor) stack.getItem();
-                    int armorInvIndex = 3 - armor.armorType;
-                    if (mc.thePlayer.inventory.armorItemInSlot(armorInvIndex) != null) continue;
-                    double itemScore = ItemUtil.getArmorScore(stack);
-                    double wornScore = ItemUtil.getArmorScore(mc.thePlayer.inventory.armorItemInSlot(armorInvIndex));
-                    if (itemScore > wornScore) {
-                        hotbarQueue.add(i);
+            case SCAN: {
+                if (!handleEvents() || mc.thePlayer.openContainer == null) {
+                    abortHotbarFlow();
+                    return true;
+                }
+                while (hotbarCursor <= 3) {
+                    int armorType = hotbarCursor;
+                    ArmorComparator.ArmorPiece piece = hotbarBestSet.get(armorType);
+                    if (piece == null || piece.stack == null) {
+                        hotbarCursor++;
+                        continue;
+                    }
+                    Integer index = piece.index;
+                    if (index == null) {
+                        hotbarCursor++;
+                        continue;
+                    }
+                    Integer hotbarIndex = LBInventoryUtils.toHotbarIndex(index, hotbarStacks.size());
+                    if (hotbarIndex == null) {
+                        hotbarCursor++;
+                        continue;
+                    }
+                    if (TickedActions.isTicked(this, index) || TickedActions.isTicked(this, armorType + 5)) {
+                        hotbarCursor++;
+                        continue;
+                    }
+                    if (!StackExtensions.hasItemAgePassed(piece.stack, minItemAge.getValue().intValue())) {
+                        hotbarCursor++;
+                        continue;
+                    }
+                    int armorPos = EntityLiving.getArmorPosition(piece.stack) - 1;
+                    if (armorPos < 0 || armorPos >= 4 || mc.thePlayer.inventory.armorInventory[armorPos] != null) {
+                        hotbarCursor++;
+                        continue;
+                    }
+                    hasClickedHotbar = true;
+                    final ItemStack armorStack = piece.stack;
+                    final int targetArmorPos = armorPos;
+                    final int targetHotbarIndex = hotbarIndex;
+                    TickedActions.nextTick(this, () -> {
+                        LBInventoryManager.autoArmorCurrentSlot = targetHotbarIndex;
+                        SilentHotbar.selectSlotSilently(AutoArmor.this, targetHotbarIndex, null, true, false, true);
+                        if (mc.thePlayer != null && mc.thePlayer.sendQueue != null) {
+                            mc.thePlayer.sendQueue.addToSendQueue(new C08PacketPlayerBlockPlacement(armorStack));
+                        }
+                        if (mc.thePlayer != null) {
+                            mc.thePlayer.inventory.armorInventory[targetArmorPos] = armorStack;
+                            mc.thePlayer.inventory.mainInventory[targetHotbarIndex] = null;
+                        }
+                    });
+                    hotbarCursor++;
+                    if (delayedSlotSwitch.isEnabled()) {
+                        LBInventoryManager.delay(sampleDelay());
+                        return false;
                     }
                 }
-                if (!hotbarQueue.isEmpty()) {
-                    hotbarPrevSlot = mc.thePlayer.inventory.currentItem;
-                    hotbarCurrentIdx = 0;
-                    int firstSlot = hotbarQueue.get(0);
-                    switchToSlot(firstSlot);
-                    hotbarNextTime = System.currentTimeMillis() + (long) RandomUtils.nextDouble(hotbarSwitchDelay.getMinValue(), hotbarSwitchDelay.getMaxValue());
-                    hotbarStep = 2;
-                    return;
+                hotbarPhase = HotbarPhase.FINAL_DELAY;
+                return false;
+            }
+            case FINAL_DELAY: {
+                LBInventoryManager.delay(sampleDelay());
+                hotbarPhase = HotbarPhase.AWAIT;
+                return false;
+            }
+            case AWAIT: {
+                if (!TickedActions.isEmpty(this)) {
+                    return false;
+                }
+                if (!hasClickedHotbar) {
+                    abortHotbarFlow();
+                    return true;
+                }
+                hasClickedHotbar = false;
+                hotbarPhase = HotbarPhase.RESET;
+                return false;
+            }
+            case RESET: {
+                if (!TickedActions.isEmpty(this)) {
+                    return false;
+                }
+                TickedActions.nextTick(this, () -> SilentHotbar.resetSlot(AutoArmor.this, false));
+                hotbarPhase = HotbarPhase.START;
+                hotbarCursor = 0;
+                hotbarBestSet = null;
+                return true;
+            }
+            default:
+                abortHotbarFlow();
+                return true;
+        }
+    }
+
+    private void abortHotbarFlow() {
+        hotbarPhase = HotbarPhase.START;
+        hotbarCursor = 0;
+        hasClickedHotbar = false;
+        hotbarBestSet = null;
+        LBInventoryManager.autoArmorCurrentSlot = -1;
+        LBInventoryManager.autoArmorLastSlot = -1;
+    }
+
+    public boolean equipFromInventoryStep() {
+        switch (invPhase) {
+            case START: {
+                int op = shouldOperate(false);
+                if (op == OP_STOP) {
+                    abortInvFlow();
+                    return true;
+                }
+                if (op == OP_WAIT) {
+                    return false;
+                }
+                invTypeCursor = 0;
+                invPhase = InvPhase.SCAN_TYPE;
+                return false;
+            }
+            case SCAN_TYPE: {
+                while (true) {
+                    int op = shouldOperate(false);
+                    if (op == OP_STOP) {
+                        abortInvFlow();
+                        return true;
+                    }
+                    if (op == OP_WAIT) {
+                        return false;
+                    }
+                    if (invTypeCursor > 3) {
+                        invPhase = InvPhase.AWAIT;
+                        return false;
+                    }
+                    int armorType = invTypeCursor;
+                    refreshInvStacks();
+                    ArmorComparator.ArmorSet armorSet = ArmorComparator.getBestArmorSet(invStacks, null);
+                    if (armorSet == null) {
+                        invTypeCursor++;
+                        continue;
+                    }
+                    ArmorComparator.ArmorPiece piece = armorSet.get(armorType);
+                    if (piece == null || piece.stack == null) {
+                        invTypeCursor++;
+                        continue;
+                    }
+                    Integer index = piece.index;
+                    if (index == null) {
+                        invTypeCursor++;
+                        continue;
+                    }
+                    ItemStack stack = piece.stack;
+                    if (TickedActions.isTicked(this, index) || TickedActions.isTicked(this, armorType + 5)) {
+                        invTypeCursor++;
+                        continue;
+                    }
+                    if (!StackExtensions.hasItemAgePassed(stack, minItemAge.getValue().intValue())) {
+                        invTypeCursor++;
+                        continue;
+                    }
+                    InventoryCleaner cleaner = Main.moduleManager == null ? null : Main.moduleManager.getModuleByClass(InventoryCleaner.class);
+                    if (cleaner != null && cleaner.canBeRepairedWithOther(stack, invStacks)) {
+                        invTypeCursor++;
+                        continue;
+                    }
+                    LBInventoryManager.autoArmorCurrentSlot = index;
+                    ItemStack equipped = armorType + 5 < invStacks.size() ? invStacks.get(armorType + 5) : null;
+                    invSeq = new ArrayList<>();
+                    invSeqCursor = 0;
+                    if (equipped == stack) {
+                        LBInventoryManager.autoArmorCurrentSlot = -1;
+                        LBInventoryManager.autoArmorLastSlot = -1;
+                        invTypeCursor++;
+                        continue;
+                    } else if (equipped == null) {
+                        invSeq.add(new int[]{index, 0, 1});
+                    } else if (smartSwap.isEnabled()) {
+                        invSeq.add(new int[]{index, 0, 0});
+                        invSeq.add(new int[]{armorType + 5, 0, 0});
+                        invSeq.add(new int[]{-999, 0, 0});
+                    } else {
+                        invSeq.add(new int[]{armorType + 5, 0, 4});
+                        invSeq.add(new int[]{index, 0, 1});
+                    }
+                    invTypeCursor++;
+                    invPhase = InvPhase.RUN_SEQ;
+                    return false;
                 }
             }
-
-            if (mode.is("OpenInv") && !(mc.currentScreen instanceof GuiInventory)) {
-                return;
+            case RUN_SEQ: {
+                int r = runInvSequence();
+                if (r == RES_ABORT) {
+                    abortInvFlow();
+                    return true;
+                }
+                if (r == RES_ADVANCE && invSeqCursor >= invSeq.size()) {
+                    invPhase = InvPhase.SCAN_TYPE;
+                }
+                return false;
             }
-
-            openSpoof();
-            int slotClick = bestSlot < 9 ? bestSlot + 36 : bestSlot;
-            int armorWindowSlot = 5 + bestType;
-
-            mc.playerController.windowClick(0, slotClick, 0, 0, mc.thePlayer);
-            swapArmorWindow = armorWindowSlot;
-            swapStep = 1;
-            updateActionTime();
-        } else {
-            closeSpoof();
+            case AWAIT: {
+                if (!TickedActions.isEmpty(this)) {
+                    return false;
+                }
+                abortInvFlow();
+                return true;
+            }
+            default:
+                abortInvFlow();
+                return true;
         }
     }
 
-    private void openSpoof() {
-        if (mode.is("SpoofInv") && !spoofed && mc.currentScreen == null) {
-            mc.thePlayer.sendQueue.addToSendQueue(new C16PacketClientStatus(C16PacketClientStatus.EnumState.OPEN_INVENTORY_ACHIEVEMENT));
-            spoofed = true;
-            guiOpenTime = System.currentTimeMillis();
-            currentStartDelay = (long) RandomUtils.nextDouble(startDelay.getMinValue(), startDelay.getMaxValue());
-            wasGuiOpen = true;
-            firstAction = true;
+    private int runInvSequence() {
+        while (invSeqCursor < invSeq.size()) {
+            int[] click = invSeq.get(invSeqCursor);
+            int r = doClick(click[0], click[1], click[2]);
+            if (r == RES_ABORT) {
+                return RES_ABORT;
+            }
+            if (r == RES_ADVANCE) {
+                invSeqCursor++;
+                continue;
+            }
+            return RES_WAIT;
+        }
+        return RES_ADVANCE;
+    }
+
+    private void refreshInvStacks() {
+        invStacks.clear();
+        for (int i = 0; i < mc.thePlayer.openContainer.inventorySlots.size(); i++) {
+            invStacks.add(mc.thePlayer.openContainer.getSlot(i).getStack());
         }
     }
 
-    private void closeSpoof() {
-        if (mode.is("SpoofInv") && spoofed && mc.currentScreen == null) {
-            mc.thePlayer.sendQueue.addToSendQueue(new C0DPacketCloseWindow(mc.thePlayer.inventoryContainer.windowId));
-            spoofed = false;
-            wasGuiOpen = false;
-        }
+    private void abortInvFlow() {
+        invPhase = InvPhase.START;
+        invTypeCursor = 0;
+        invSeqCursor = 0;
+        invSeq = new ArrayList<>();
     }
 }

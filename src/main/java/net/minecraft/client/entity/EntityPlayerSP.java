@@ -1,7 +1,12 @@
 package net.minecraft.client.entity;
 
 import dev.astra.Main;
+import dev.astra.util.rotation.RotationManager;
+import dev.astra.util.rotation.RotationUtils;
 import dev.astra.module.impl.movement.NoSlow;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
+import de.florianmichael.viamcp.fixes.AttackOrder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.MovingSoundMinecartRiding;
 import net.minecraft.client.audio.PositionedSoundRecord;
@@ -88,61 +93,57 @@ public class EntityPlayerSP extends AbstractClientPlayer {
 
     public void onUpdate() {
         if (this.worldObj.isBlockLoaded(new BlockPos(this.posX, 0.0D, this.posZ))) {
+            this.prevVisualYaw = this.visualYaw;
+            this.prevVisualPitch = this.visualPitch;
+            this.prevVisualBodyYaw = this.visualBodyYaw;
+
+            double preEventPosX = this.posX;
+            double preEventPosY = this.posY;
+            double preEventPosZ = this.posZ;
+            boolean preEventOnGround = this.onGround;
+
+            dev.astra.event.events.player.PreUpdateEvent preEvent = new dev.astra.event.events.player.PreUpdateEvent(this.rotationYaw, this.rotationPitch, this.posX, this.posY, this.posZ, this.onGround);
+            dev.astra.Main.eventBus.post(preEvent);
+
+            if (!preEvent.isCancelled()
+                    && RotationManager.isActive()
+                    && RotationManager.getRotationMode() == RotationManager.RotationMode.LockView) {
+                this.rotationYaw = RotationManager.getYaw();
+                this.rotationPitch = RotationManager.getPitch();
+            }
+
             super.onUpdate();
 
             if (this.isRiding()) {
                 this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(this.rotationYaw, this.rotationPitch, this.onGround));
                 this.sendQueue.addToSendQueue(new C0CPacketInput(this.moveStrafing, this.moveForward, this.movementInput.jump, this.movementInput.sneak));
-            } else {
-                this.onUpdateWalkingPlayer();
+            } else if (!preEvent.isCancelled()) {
+                this.onUpdateWalkingPlayer(preEvent, preEventPosX, preEventPosY, preEventPosZ, preEventOnGround);
             }
         }
     }
 
-    public void onUpdateWalkingPlayer() {
-        this.prevVisualYaw = this.visualYaw;
-        this.prevVisualPitch = this.visualPitch;
-        this.prevVisualBodyYaw = this.visualBodyYaw;
+    public void onUpdateWalkingPlayer(dev.astra.event.events.player.PreUpdateEvent preEvent, double preEventPosX, double preEventPosY, double preEventPosZ, boolean preEventOnGround) {
+        float packetYaw = this.rotationYaw;
+        float packetPitch = this.rotationPitch;
 
-        dev.astra.event.events.EventPreUpdate preEvent = new dev.astra.event.events.EventPreUpdate(this.rotationYaw, this.rotationPitch, this.posY, this.onGround);
-        dev.astra.Main.eventBus.post(preEvent);
-        if (preEvent.isCancelled()) return;
-
-        float originalYaw = this.rotationYaw;
-        float originalPitch = this.rotationPitch;
-
-        float packetYaw = preEvent.getYaw();
-        float packetPitch = preEvent.getPitch();
-
-        this.rotationYaw = preEvent.getYaw();
-        this.rotationPitch = preEvent.getPitch();
-
-        if (dev.astra.utils.rotation.RotationManager.isActive()) {
-            switch (dev.astra.utils.rotation.RotationManager.getRotationMode()) {
-                case LockView:
-                    this.rotationYaw = dev.astra.utils.rotation.RotationManager.getYaw();
-                    this.rotationPitch = dev.astra.utils.rotation.RotationManager.getPitch();
-                    packetYaw = this.rotationYaw;
-                    packetPitch = this.rotationPitch;
-                    break;
-                case Silent:
-                    packetYaw = dev.astra.utils.rotation.RotationManager.getYaw();
-                    packetPitch = dev.astra.utils.rotation.RotationManager.getPitch();
-                    this.rotationYaw = originalYaw;
-                    this.rotationPitch = originalPitch;
-                    break;
-                case None:
-                default:
-                    packetYaw = this.rotationYaw;
-                    packetPitch = this.rotationPitch;
-                    break;
-            }
+        if (RotationManager.isActive() && RotationManager.getRotationMode() == RotationManager.RotationMode.Silent) {
+            packetYaw = RotationManager.getYaw();
+            packetPitch = RotationManager.getPitch();
         }
 
-        this.posY = preEvent.getPosY();
-        this.onGround = preEvent.isOnGround();
+        if (preEvent.getPosY() != preEventPosY) {
+            this.posY = preEvent.getPosY();
+        }
+
+        if (preEvent.isOnGround() != preEventOnGround) {
+            this.onGround = preEvent.isOnGround();
+        }
+
+        double packetPosX = this.posX + (preEvent.getPosX() - preEventPosX);
+        double packetPosZ = this.posZ + (preEvent.getPosZ() - preEventPosZ);
     
-        boolean flag = this.isSprinting();
+        boolean flag = this.isSprinting() && !dev.astra.module.impl.movement.NoSlow.shouldFakeNotSprinting();
 
         if (flag != this.serverSprintState) {
             if (flag) {
@@ -165,9 +166,9 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         }
 
         if (this.isCurrentViewEntity()) {
-            double d0 = this.posX - this.lastReportedPosX;
+            double d0 = packetPosX - this.lastReportedPosX;
             double d1 = this.getEntityBoundingBox().minY - this.lastReportedPosY;
-            double d2 = this.posZ - this.lastReportedPosZ;
+            double d2 = packetPosZ - this.lastReportedPosZ;
             double d3 = packetYaw - this.lastReportedYaw;
             double d4 = packetPitch - this.lastReportedPitch;
             boolean flag2 = d0 * d0 + d1 * d1 + d2 * d2 > 9.0E-4D || this.positionUpdateTicks >= 20;
@@ -175,9 +176,9 @@ public class EntityPlayerSP extends AbstractClientPlayer {
 
             if (this.ridingEntity == null) {
                 if (flag2 && flag3) {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(this.posX, this.getEntityBoundingBox().minY, this.posZ, packetYaw, packetPitch, this.onGround));
+                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C06PacketPlayerPosLook(packetPosX, this.getEntityBoundingBox().minY, packetPosZ, packetYaw, packetPitch, this.onGround));
                 } else if (flag2) {
-                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C04PacketPlayerPosition(this.posX, this.getEntityBoundingBox().minY, this.posZ, this.onGround));
+                    this.sendQueue.addToSendQueue(new C03PacketPlayer.C04PacketPlayerPosition(packetPosX, this.getEntityBoundingBox().minY, packetPosZ, this.onGround));
                 } else if (flag3) {
                     this.sendQueue.addToSendQueue(new C03PacketPlayer.C05PacketPlayerLook(packetYaw, packetPitch, this.onGround));
                 } else {
@@ -191,9 +192,9 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             ++this.positionUpdateTicks;
 
             if (flag2) {
-                this.lastReportedPosX = this.posX;
+                this.lastReportedPosX = packetPosX;
                 this.lastReportedPosY = this.getEntityBoundingBox().minY;
-                this.lastReportedPosZ = this.posZ;
+                this.lastReportedPosZ = packetPosZ;
                 this.positionUpdateTicks = 0;
             }
 
@@ -202,16 +203,16 @@ public class EntityPlayerSP extends AbstractClientPlayer {
                 this.lastReportedPitch = packetPitch;
             }
             
-            dev.astra.event.events.EventPostUpdate postEvent = new dev.astra.event.events.EventPostUpdate(this.rotationYaw, this.rotationPitch, this.posY, this.onGround);
+            dev.astra.event.events.player.PostUpdateEvent postEvent = new dev.astra.event.events.player.PostUpdateEvent(this.rotationYaw, this.rotationPitch, this.posY, this.onGround);
             dev.astra.Main.eventBus.post(postEvent);
         }
     }
 
     public Vec3 getLook(float partialTicks) {
-        if (dev.astra.utils.rotation.RotationManager.isActive()) {
-            return dev.astra.utils.rotation.RotationUtils.getLookVector(
-                dev.astra.utils.rotation.RotationManager.getYaw(),
-                dev.astra.utils.rotation.RotationManager.getPitch()
+        if (RotationManager.isActive()) {
+            return RotationUtils.getLookVector(
+                RotationManager.getYaw(),
+                RotationManager.getPitch()
             );
         }
         return super.getLook(partialTicks);
@@ -235,7 +236,11 @@ public class EntityPlayerSP extends AbstractClientPlayer {
 
     public void swingItem() {
         super.swingItem();
-        this.sendQueue.addToSendQueue(new C0APacketAnimation());
+        if (ViaLoadingBase.getInstance().getTargetVersion().olderThanOrEqualTo(ProtocolVersion.v1_8)) {
+            this.sendQueue.addToSendQueue(new C0APacketAnimation());
+        } else {
+            AttackOrder.send1_9Animation();
+        }
     }
 
     public void respawnPlayer() {
@@ -477,13 +482,15 @@ public class EntityPlayerSP extends AbstractClientPlayer {
     }
     
     public void onCriticalHit(Entity entityHit) {
-        if (!(dev.astra.module.impl.render.Particles.INSTANCE != null && dev.astra.module.impl.render.Particles.INSTANCE.isToggle())) {
+        dev.astra.module.impl.render.Particles particles = dev.astra.module.impl.render.Particles.INSTANCE;
+        if (!(particles != null && particles.isToggle() && particles.crit.getValue() > 0)) {
             this.mc.effectRenderer.emitParticleAtEntity(entityHit, EnumParticleTypes.CRIT);
         }
     }
 
     public void onEnchantmentCritical(Entity entityHit) {
-        if (!(dev.astra.module.impl.render.Particles.INSTANCE != null && dev.astra.module.impl.render.Particles.INSTANCE.isToggle())) {
+        dev.astra.module.impl.render.Particles particles = dev.astra.module.impl.render.Particles.INSTANCE;
+        if (!(particles != null && particles.isToggle() && particles.sharpness.getValue() > 0)) {
             this.mc.effectRenderer.emitParticleAtEntity(entityHit, EnumParticleTypes.CRIT_MAGIC);
         }
     }
@@ -500,13 +507,13 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         dev.astra.module.impl.render.Rotation rotModule = dev.astra.Main.moduleManager != null ? dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.Rotation.class) : null;
         boolean rotEnabled = rotModule != null && rotModule.isToggle();
 
-        boolean rotMgrActive = dev.astra.utils.rotation.RotationManager.isActive();
+        boolean rotMgrActive = RotationManager.isActive();
         boolean isVisualActive = (rotMgrActive || this.visualActive) && rotEnabled;
 
         if (isVisualActive) {
             if (rotMgrActive) {
-                this.rotationYaw = dev.astra.utils.rotation.RotationManager.getYaw();
-                this.rotationPitch = dev.astra.utils.rotation.RotationManager.getPitch();
+                this.rotationYaw = RotationManager.getYaw();
+                this.rotationPitch = RotationManager.getPitch();
             } else {
                 this.rotationYaw = this.visualYaw;
                 this.rotationPitch = this.visualPitch;
@@ -520,13 +527,13 @@ public class EntityPlayerSP extends AbstractClientPlayer {
 
         if (isVisualActive) {
             if (rotMgrActive) {
-                this.rotationYawHead = dev.astra.utils.rotation.RotationManager.getYaw();
-                this.visualYaw = dev.astra.utils.rotation.RotationManager.getYaw();
-                this.visualPitch = dev.astra.utils.rotation.RotationManager.getPitch();
-                this.visualBodyYaw = dev.astra.utils.rotation.RotationManager.getBodyYaw();
-                this.prevVisualYaw = dev.astra.utils.rotation.RotationManager.getPrevYaw();
-                this.prevVisualPitch = dev.astra.utils.rotation.RotationManager.getPrevPitch();
-                this.prevVisualBodyYaw = dev.astra.utils.rotation.RotationManager.getPrevBodyYaw();
+                this.rotationYawHead = RotationManager.getYaw();
+                this.visualYaw = RotationManager.getYaw();
+                this.visualPitch = RotationManager.getPitch();
+                this.visualBodyYaw = RotationManager.getBodyYaw();
+                this.prevVisualYaw = RotationManager.getPrevYaw();
+                this.prevVisualPitch = RotationManager.getPrevPitch();
+                this.prevVisualBodyYaw = RotationManager.getPrevBodyYaw();
                 this.renderYawOffset = this.visualBodyYaw;
             } else {
                 this.rotationYawHead = this.visualYaw;
@@ -544,12 +551,6 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             this.moveStrafing = this.movementInput.moveStrafe;
             this.moveForward = this.movementInput.moveForward;
             this.isJumping = this.movementInput.jump;
-
-            if (rotMgrActive && dev.astra.utils.rotation.RotationManager.getMoveFix() != dev.astra.utils.rotation.RotationManager.MoveFix.None) {
-                float[] fixed = dev.astra.utils.rotation.RotationManager.fixMovement(this.moveForward, this.moveStrafing, this.rotationYaw);
-                this.moveForward = fixed[0];
-                this.moveStrafing = fixed[1];
-            }
 
             this.prevRenderArmYaw = this.renderArmYaw;
             this.prevRenderArmPitch = this.renderArmPitch;
@@ -571,7 +572,8 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         if (dev.astra.Main.moduleManager != null) {
             dev.astra.module.impl.render.Animations anim = dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.Animations.class);
             if (anim != null && anim.isToggle()) {
-                return Math.max(1, super.getArmSwingAnimationEnd() - anim.swingSpeed.getValue().intValue());
+                dev.astra.value.impl.NumberValue speedValue = anim.isBlockState() ? anim.blockSpeed : anim.heldSpeed;
+                return Math.max(1, super.getArmSwingAnimationEnd() - speedValue.getValue().intValue());
             }
         }
         return super.getArmSwingAnimationEnd();
@@ -593,7 +595,10 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         this.prevTimeInPortal = this.timeInPortal;
 
         if (this.inPortal) {
-            if (this.mc.currentScreen != null && !this.mc.currentScreen.doesGuiPauseGame()) {
+            if (this.mc.currentScreen != null && !this.mc.currentScreen.doesGuiPauseGame()
+                    && !(dev.astra.module.impl.misc.Fixes.INSTANCE != null
+                    && dev.astra.module.impl.misc.Fixes.INSTANCE.isToggle()
+                    && dev.astra.module.impl.misc.Fixes.INSTANCE.allowGuiInPortal.getValue())) {
                 this.mc.displayGuiScreen(null);
             }
 
@@ -634,11 +639,16 @@ public class EntityPlayerSP extends AbstractClientPlayer {
         boolean flag2 = this.movementInput.moveForward >= f;
         this.movementInput.updatePlayerMoveState();
 
-        if (this.isUsingItem() && !this.isRiding()) {
-            double mult = NoSlow.getSlowDownMultiplier(this.getHeldItem());
+        if (RotationManager.isActive()
+                && RotationManager.getMoveFix() == RotationManager.MoveFix.Silent
+                && RotationManager.getRotationMode() != RotationManager.RotationMode.LockView
+                && dev.astra.util.MoveUtil.isForwardPressed()) {
+            dev.astra.util.MoveUtil.fixStrafe(RotationManager.getYaw());
+        }
 
-            this.movementInput.moveStrafe *= (float) mult;
-            this.movementInput.moveForward *= (float) mult;
+        if (this.isUsingItem() && !this.isRiding()) {
+            this.movementInput.moveStrafe *= (float) dev.astra.module.impl.movement.NoSlow.getStrafeSlowed(this.getHeldItem());
+            this.movementInput.moveForward *= (float) dev.astra.module.impl.movement.NoSlow.getForwardSlowed(this.getHeldItem());
             this.sprintToggleTimer = 0;
         }
 
@@ -666,6 +676,10 @@ public class EntityPlayerSP extends AbstractClientPlayer {
             if (sprintModule != null && sprintModule.isToggle() && sprintModule.omni.getValue()) {
                 canOmniSprint = true;
             }
+        }
+
+        if (!canOmniSprint && dev.astra.module.impl.movement.NoSlow.isOmniForced()) {
+            canOmniSprint = true;
         }
 
         if (this.isSprinting() && ((this.movementInput.moveForward < f && !canOmniSprint) || this.isCollidedHorizontally || !flag3)) {

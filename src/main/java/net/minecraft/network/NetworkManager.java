@@ -223,8 +223,8 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet> {
 
     public void closeChannel(IChatComponent message) {
         if (this.channel.isOpen()) {
-            this.channel.close().awaitUninterruptibly();
             this.terminationReason = message;
+            this.channel.close();
         }
     }
 
@@ -334,10 +334,14 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet> {
             if (!this.disconnected) {
                 this.disconnected = true;
 
-                if (this.getExitMessage() != null) {
-                    this.getNetHandler().onDisconnect(this.getExitMessage());
-                } else if (this.getNetHandler() != null) {
-                    this.getNetHandler().onDisconnect(new ChatComponentText("Disconnected"));
+                try {
+                    if (this.getExitMessage() != null) {
+                        this.getNetHandler().onDisconnect(this.getExitMessage());
+                    } else if (this.getNetHandler() != null) {
+                        this.getNetHandler().onDisconnect(new ChatComponentText("Disconnected"));
+                    }
+                } catch (Throwable throwable) {
+                    logger.error("Error while handling disconnection", throwable);
                 }
             } else {
                 logger.warn("handleDisconnection() called twice");

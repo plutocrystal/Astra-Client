@@ -4,10 +4,13 @@ import dev.astra.value.Value;
 
 public class NumberValue extends Value<Double> {
     private double min;
+
     private double max;
+
     private double increment;
 
     private NumberValue boundMax = null;
+
     private NumberValue boundMin = null;
 
     public NumberValue(String name, double default_value, double min, double max, double increment) {

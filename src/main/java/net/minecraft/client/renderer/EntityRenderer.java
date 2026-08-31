@@ -499,8 +499,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
 
     private void hurtCameraEffect(float partialTicks) {
     
-        dev.astra.module.impl.render.NoHurtTime noHurtTime = dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.NoHurtTime.class);
-        if (noHurtTime != null && noHurtTime.isToggle()) {
+        if (dev.astra.module.impl.render.NoRender.hideHurtCam()) {
             return;
         }
 
@@ -698,13 +697,13 @@ public class EntityRenderer implements IResourceManagerReloadListener {
 
         this.hurtCameraEffect(partialTicks);
 
-        if (this.mc.gameSettings.viewBobbing) {
+        if (this.mc.gameSettings.viewBobbing && !dev.astra.module.impl.render.NoRender.hideViewBobbing()) {
             this.setupViewBobbing(partialTicks);
         }
 
         float f1 = this.mc.thePlayer.prevTimeInPortal + (this.mc.thePlayer.timeInPortal - this.mc.thePlayer.prevTimeInPortal) * partialTicks;
 
-        if (f1 > 0.0F) {
+        if (f1 > 0.0F && !dev.astra.module.impl.render.NoRender.shouldHideWobble()) {
             int i = 20;
 
             if (this.mc.thePlayer.isPotionActive(Potion.confusion)) {
@@ -1227,7 +1226,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
 
         this.mc.mcProfiler.endSection();
         
-        dev.astra.Main.eventBus.post(new dev.astra.event.events.Render3DEvent(partialTicks));
+        dev.astra.Main.eventBus.post(new dev.astra.event.events.render.Render3DEvent(partialTicks));
     }
 
     private void renderWorldPass(int pass, float partialTicks, long finishTimeNano) {
@@ -1610,7 +1609,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
                 BlockPos blockpos2 = blockpos1.down();
                 Block block = world.getBlockState(blockpos2).getBlock();
 
-                if (blockpos1.getY() <= blockpos.getY() + i && blockpos1.getY() >= blockpos.getY() - i && biomegenbase.canRain() && biomegenbase.getFloatTemperature(blockpos1) >= 0.15F) {
+                if (blockpos1.getY() <= blockpos.getY() + i && blockpos1.getY() >= blockpos.getY() - i && biomegenbase.canRain() && biomegenbase.getFloatTemperature(blockpos1) >= 0.15F && !dev.astra.module.impl.render.Ambience.forceSnow()) {
                     double d3 = this.random.nextDouble();
                     double d4 = this.random.nextDouble();
 
@@ -1698,7 +1697,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
                     blockpos$mutableblockpos.set(l1, 0, k1);
                     BiomeGenBase biomegenbase = world.getBiomeGenForCoords(blockpos$mutableblockpos);
 
-                    if (biomegenbase.canRain() || biomegenbase.getEnableSnow()) {
+                    if (biomegenbase.canRain() || biomegenbase.getEnableSnow() || dev.astra.module.impl.render.Ambience.forcePrecipitation()) {
                         int j2 = world.getPrecipitationHeight(blockpos$mutableblockpos).getY();
                         int k2 = j - i1;
                         int l2 = j + i1;
@@ -1722,7 +1721,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
                             blockpos$mutableblockpos.set(l1, k2, k1);
                             float f1 = biomegenbase.getFloatTemperature(blockpos$mutableblockpos);
 
-                            if (world.getWorldChunkManager().getTemperatureAtHeight(f1, j2) >= 0.15F) {
+                            if (!dev.astra.module.impl.render.Ambience.forceSnow() && world.getWorldChunkManager().getTemperatureAtHeight(f1, j2) >= 0.15F) {
                                 if (j1 != 0) {
                                     if (j1 >= 0) {
                                         tessellator.draw();
@@ -1904,7 +1903,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
         this.fogColorBlue *= f13;
         double d1 = (entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * (double) partialTicks) * world.provider.getVoidFogYFactor();
 
-        if (entity instanceof EntityLivingBase && ((EntityLivingBase) entity).isPotionActive(Potion.blindness)) {
+        if (entity instanceof EntityLivingBase && ((EntityLivingBase) entity).isPotionActive(Potion.blindness) && !dev.astra.module.impl.render.NoRender.hideBlindness()) {
             int i = ((EntityLivingBase) entity).getActivePotionEffect(Potion.blindness).getDuration();
 
             if (i < 20) {
@@ -1994,7 +1993,7 @@ public class EntityRenderer implements IResourceManagerReloadListener {
 
         if (f >= 0.0F) {
             GlStateManager.setFogDensity(f);
-        } else if (entity instanceof EntityLivingBase && ((EntityLivingBase) entity).isPotionActive(Potion.blindness)) {
+        } else if (entity instanceof EntityLivingBase && ((EntityLivingBase) entity).isPotionActive(Potion.blindness) && !dev.astra.module.impl.render.NoRender.hideBlindness()) {
             float f4 = 5.0F;
             int i = ((EntityLivingBase) entity).getActivePotionEffect(Potion.blindness).getDuration();
 

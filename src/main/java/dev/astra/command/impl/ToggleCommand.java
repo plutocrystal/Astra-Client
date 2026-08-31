@@ -5,12 +5,10 @@ import dev.astra.command.Command;
 import dev.astra.module.Module;
 import dev.astra.util.ChatUtil;
 import net.minecraft.util.EnumChatFormatting;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class ToggleCommand implements Command {
-
     @Override
     public String[] getAliases() {
         return new String[]{"toggle"};
@@ -22,7 +20,6 @@ public class ToggleCommand implements Command {
             ChatUtil.sendMessage("Usage: .toggle <module>");
             return;
         }
-
         String moduleName = args[0];
         for (Module module : Main.moduleManager.getModules()) {
             if (module.getName().equalsIgnoreCase(moduleName)) {
@@ -31,7 +28,6 @@ public class ToggleCommand implements Command {
                 return;
             }
         }
-
         ChatUtil.sendMessage("Module not found: " + moduleName);
     }
 

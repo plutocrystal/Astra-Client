@@ -30,19 +30,31 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class OldServerPinger {
     private static final Splitter PING_RESPONSE_SPLITTER = Splitter.on('\u0000').limit(6);
     private static final Logger logger = LogManager.getLogger();
     private final List<NetworkManager> pingDestinations = Collections.synchronizedList(Lists.newArrayList());
 
+    private static final ExecutorService COMPAT_EXECUTOR = Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("Astra Ping Retry #%d").setDaemon(true).build());
+
     public void ping(final ServerData server) throws UnknownHostException {
         ServerAddress serveraddress = ServerAddress.fromString(server.serverIP);
+        if (serveraddress == null || serveraddress.getIP().trim().isEmpty()) {
+            server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't connect to server.";
+            server.populationInfo = "";
+            server.pingToServer = -1L;
+            return;
+        }
         final NetworkManager networkmanager = NetworkManager.createNetworkManagerAndConnect(InetAddress.getByName(serveraddress.getIP()), serveraddress.getPort(), false);
         this.pingDestinations.add(networkmanager);
         server.serverMOTD = "Pinging...";
@@ -146,75 +158,98 @@ public class OldServerPinger {
     }
 
     private void tryCompatibilityPing(final ServerData server) {
-        final ServerAddress serveraddress = ServerAddress.fromString(server.serverIP);
-        (new Bootstrap()).group(NetworkManager.CLIENT_NIO_EVENTLOOP.getValue()).handler(new ChannelInitializer<Channel>() {
-            protected void initChannel(Channel p_initChannel_1_) throws Exception {
+        final ServerAddress serveraddress;
+        try {
+            serveraddress = ServerAddress.fromString(server.serverIP);
+        } catch (Throwable t) {
+            logger.error("Can't parse address for " + server.serverIP, t);
+            server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't connect to server.";
+            server.populationInfo = "";
+            return;
+        }
+        if (serveraddress == null || serveraddress.getIP().trim().isEmpty()) {
+            server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't connect to server.";
+            server.populationInfo = "";
+            return;
+        }
+        COMPAT_EXECUTOR.execute(new Runnable() {
+            public void run() {
                 try {
-                    p_initChannel_1_.config().setOption(ChannelOption.TCP_NODELAY, Boolean.valueOf(true));
-                } catch (ChannelException var3) {
+                    (new Bootstrap()).group(NetworkManager.CLIENT_NIO_EVENTLOOP.getValue()).handler(new ChannelInitializer<Channel>() {
+                        protected void initChannel(Channel p_initChannel_1_) throws Exception {
+                            try {
+                                p_initChannel_1_.config().setOption(ChannelOption.TCP_NODELAY, Boolean.valueOf(true));
+                            } catch (ChannelException var3) {
+                            }
+
+                            p_initChannel_1_.pipeline().addLast(new SimpleChannelInboundHandler<ByteBuf>() {
+                                public void channelActive(ChannelHandlerContext p_channelActive_1_) throws Exception {
+                                    super.channelActive(p_channelActive_1_);
+                                    ByteBuf bytebuf = Unpooled.buffer();
+
+                                    try {
+                                        bytebuf.writeByte(254);
+                                        bytebuf.writeByte(1);
+                                        bytebuf.writeByte(250);
+                                        char[] achar = "MC|PingHost".toCharArray();
+                                        bytebuf.writeShort(achar.length);
+
+                                        for (char c0 : achar) {
+                                            bytebuf.writeChar(c0);
+                                        }
+
+                                        bytebuf.writeShort(7 + 2 * serveraddress.getIP().length());
+                                        bytebuf.writeByte(127);
+                                        achar = serveraddress.getIP().toCharArray();
+                                        bytebuf.writeShort(achar.length);
+
+                                        for (char c1 : achar) {
+                                            bytebuf.writeChar(c1);
+                                        }
+
+                                        bytebuf.writeInt(serveraddress.getPort());
+                                        p_channelActive_1_.channel().writeAndFlush(bytebuf).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
+                                    } finally {
+                                        bytebuf.release();
+                                    }
+                                }
+
+                                protected void channelRead0(ChannelHandlerContext p_channelRead0_1_, ByteBuf p_channelRead0_2_) throws Exception {
+                                    short short1 = p_channelRead0_2_.readUnsignedByte();
+
+                                    if (short1 == 255) {
+                                        String s = new String(p_channelRead0_2_.readBytes(p_channelRead0_2_.readShort() * 2).array(), Charsets.UTF_16BE);
+                                        String[] astring = Iterables.toArray(OldServerPinger.PING_RESPONSE_SPLITTER.split(s), String.class);
+
+                                        if ("\u00a71".equals(astring[0])) {
+                                            int i = MathHelper.parseIntWithDefault(astring[1], 0);
+                                            String s1 = astring[2];
+                                            String s2 = astring[3];
+                                            int j = MathHelper.parseIntWithDefault(astring[4], -1);
+                                            int k = MathHelper.parseIntWithDefault(astring[5], -1);
+                                            server.version = -1;
+                                            server.gameVersion = s1;
+                                            server.serverMOTD = s2;
+                                            server.populationInfo = EnumChatFormatting.GRAY + "" + j + EnumChatFormatting.DARK_GRAY + "/" + EnumChatFormatting.GRAY + k;
+                                        }
+                                    }
+
+                                    p_channelRead0_1_.close();
+                                }
+
+                                public void exceptionCaught(ChannelHandlerContext p_exceptionCaught_1_, Throwable p_exceptionCaught_2_) throws Exception {
+                                    p_exceptionCaught_1_.close();
+                                }
+                            });
+                        }
+                    }).channel(NioSocketChannel.class).connect(serveraddress.getIP(), serveraddress.getPort());
+                } catch (Throwable t) {
+                    logger.error("Can't ping " + server.serverIP, t);
+                    server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't connect to server.";
+                    server.populationInfo = "";
                 }
-
-                p_initChannel_1_.pipeline().addLast(new SimpleChannelInboundHandler<ByteBuf>() {
-                    public void channelActive(ChannelHandlerContext p_channelActive_1_) throws Exception {
-                        super.channelActive(p_channelActive_1_);
-                        ByteBuf bytebuf = Unpooled.buffer();
-
-                        try {
-                            bytebuf.writeByte(254);
-                            bytebuf.writeByte(1);
-                            bytebuf.writeByte(250);
-                            char[] achar = "MC|PingHost".toCharArray();
-                            bytebuf.writeShort(achar.length);
-
-                            for (char c0 : achar) {
-                                bytebuf.writeChar(c0);
-                            }
-
-                            bytebuf.writeShort(7 + 2 * serveraddress.getIP().length());
-                            bytebuf.writeByte(127);
-                            achar = serveraddress.getIP().toCharArray();
-                            bytebuf.writeShort(achar.length);
-
-                            for (char c1 : achar) {
-                                bytebuf.writeChar(c1);
-                            }
-
-                            bytebuf.writeInt(serveraddress.getPort());
-                            p_channelActive_1_.channel().writeAndFlush(bytebuf).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
-                        } finally {
-                            bytebuf.release();
-                        }
-                    }
-
-                    protected void channelRead0(ChannelHandlerContext p_channelRead0_1_, ByteBuf p_channelRead0_2_) throws Exception {
-                        short short1 = p_channelRead0_2_.readUnsignedByte();
-
-                        if (short1 == 255) {
-                            String s = new String(p_channelRead0_2_.readBytes(p_channelRead0_2_.readShort() * 2).array(), Charsets.UTF_16BE);
-                            String[] astring = Iterables.toArray(OldServerPinger.PING_RESPONSE_SPLITTER.split(s), String.class);
-
-                            if ("\u00a71".equals(astring[0])) {
-                                int i = MathHelper.parseIntWithDefault(astring[1], 0);
-                                String s1 = astring[2];
-                                String s2 = astring[3];
-                                int j = MathHelper.parseIntWithDefault(astring[4], -1);
-                                int k = MathHelper.parseIntWithDefault(astring[5], -1);
-                                server.version = -1;
-                                server.gameVersion = s1;
-                                server.serverMOTD = s2;
-                                server.populationInfo = EnumChatFormatting.GRAY + "" + j + EnumChatFormatting.DARK_GRAY + "/" + EnumChatFormatting.GRAY + k;
-                            }
-                        }
-
-                        p_channelRead0_1_.close();
-                    }
-
-                    public void exceptionCaught(ChannelHandlerContext p_exceptionCaught_1_, Throwable p_exceptionCaught_2_) throws Exception {
-                        p_exceptionCaught_1_.close();
-                    }
-                });
             }
-        }).channel(NioSocketChannel.class).connect(serveraddress.getIP(), serveraddress.getPort());
+        });
     }
 
     public void pingPendingNetworks() {
@@ -224,11 +259,16 @@ public class OldServerPinger {
             while (iterator.hasNext()) {
                 NetworkManager networkmanager = iterator.next();
 
-                if (networkmanager.isChannelOpen()) {
-                    networkmanager.processReceivedPackets();
-                } else {
+                try {
+                    if (networkmanager.isChannelOpen()) {
+                        networkmanager.processReceivedPackets();
+                    } else {
+                        iterator.remove();
+                        networkmanager.checkDisconnected();
+                    }
+                } catch (Throwable throwable) {
                     iterator.remove();
-                    networkmanager.checkDisconnected();
+                    logger.error("Error while processing ping for a server", throwable);
                 }
             }
         }

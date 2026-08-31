@@ -12,7 +12,7 @@ import net.minecraft.item.ItemStack;
 import java.util.List;
 
 public abstract class CreativeTabs {
-    public static final CreativeTabs[] creativeTabArray = new CreativeTabs[12];
+    public static final CreativeTabs[] creativeTabArray = new CreativeTabs[14];
     public static final CreativeTabs tabBlock = new CreativeTabs(0, "buildingBlocks") {
         public Item getTabIconItem() {
             return Item.getItemFromBlock(Blocks.brick_block);
@@ -145,11 +145,15 @@ public abstract class CreativeTabs {
     }
 
     public int getTabColumn() {
-        return this.tabIndex % 6;
+        return this.tabIndex >= 12 ? this.tabIndex - 12 : this.tabIndex % 6;
+    }
+
+    public int getTabRow() {
+        return this.tabIndex < 6 ? 0 : (this.tabIndex < 12 ? 1 : 2);
     }
 
     public boolean isTabInFirstRow() {
-        return this.tabIndex < 6;
+        return this.getTabRow() == 0;
     }
 
     public EnumEnchantmentType[] getRelevantEnchantmentTypes() {

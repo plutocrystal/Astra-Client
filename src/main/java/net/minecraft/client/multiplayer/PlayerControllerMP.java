@@ -1,5 +1,14 @@
 package net.minecraft.client.multiplayer;
 
+import com.viaversion.viaversion.api.Via;
+import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.minecraft.BlockPosition;
+import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import com.viaversion.viaversion.api.type.Types;
+import com.viaversion.viaversion.protocols.v1_18_2to1_19.Protocol1_18_2To1_19;
+import com.viaversion.viaversion.protocols.v1_18_2to1_19.packet.ServerboundPackets1_19;
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -30,6 +39,31 @@ public class PlayerControllerMP {
     private boolean isHittingBlock;
     public WorldSettings.GameType currentGameType = WorldSettings.GameType.SURVIVAL;
     private int currentPlayerItem;
+    private int sequenceId;
+
+    public int getSequenceId() {
+        return ++this.sequenceId;
+    }
+
+    private dev.astra.module.impl.world.FastBreak getFastBreak() {
+        if (dev.astra.Main.moduleManager == null) {
+            return null;
+        }
+        return dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.world.FastBreak.class);
+    }
+
+    private void send1_19PlayerAction(C07PacketPlayerDigging.Action action, BlockPos pos, EnumFacing face) {
+        PacketWrapper packet = PacketWrapper.create(ServerboundPackets1_19.PLAYER_ACTION, Via.getManager().getConnectionManager().getConnections().iterator().next());
+        packet.write(Types.VAR_INT, action.ordinal());
+        packet.write(Types.BLOCK_POSITION1_14, new BlockPosition(pos.getX(), pos.getY(), pos.getZ()));
+        packet.write(Types.BYTE, (byte) face.getIndex());
+        packet.write(Types.VAR_INT, this.getSequenceId());
+        try {
+            packet.sendToServer(Protocol1_18_2To1_19.class);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     public PlayerControllerMP(Minecraft mcIn, NetHandlerPlayClient netHandler) {
         this.mc = mcIn;
@@ -143,15 +177,24 @@ public class PlayerControllerMP {
             return false;
         } else {
             if (this.currentGameType.isCreative()) {
-                this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, loc, face));
+                if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                    this.send1_19PlayerAction(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, loc, face);
+                } else {
+                    this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, loc, face));
+                }
                 clickBlockCreative(this.mc, this, loc, face);
-                this.blockHitDelay = 5;
+                dev.astra.module.impl.world.FastBreak fastBreak = this.getFastBreak();
+                this.blockHitDelay = fastBreak != null && fastBreak.isToggle() && fastBreak.noBreakDelay.getValue() ? 0 : 5;
             } else if (!this.isHittingBlock || !this.isHittingPosition(loc)) {
                 if (this.isHittingBlock) {
                     this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.ABORT_DESTROY_BLOCK, this.currentBlock, face));
                 }
 
-                this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, loc, face));
+                if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                    this.send1_19PlayerAction(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, loc, face);
+                } else {
+                    this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, loc, face));
+                }
                 Block block1 = this.mc.theWorld.getBlockState(loc).getBlock();
                 boolean flag = block1.getMaterial() != Material.air;
 
@@ -187,12 +230,20 @@ public class PlayerControllerMP {
     public boolean onPlayerDamageBlock(BlockPos posBlock, EnumFacing directionFacing) {
         this.syncCurrentPlayItem();
 
-        if (this.blockHitDelay > 0) {
+        dev.astra.module.impl.world.FastBreak fastBreak = this.getFastBreak();
+        boolean fastBreakActive = fastBreak != null && fastBreak.isToggle();
+        boolean noBreakDelay = fastBreakActive && fastBreak.noBreakDelay.getValue();
+
+        if (this.blockHitDelay > 0 && !noBreakDelay) {
             --this.blockHitDelay;
             return true;
         } else if (this.currentGameType.isCreative() && this.mc.theWorld.getWorldBorder().contains(posBlock)) {
-            this.blockHitDelay = 5;
-            this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, posBlock, directionFacing));
+            this.blockHitDelay = noBreakDelay ? 0 : 5;
+            if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                this.send1_19PlayerAction(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, posBlock, directionFacing);
+            } else {
+                this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.START_DESTROY_BLOCK, posBlock, directionFacing));
+            }
             clickBlockCreative(this.mc, this, posBlock, directionFacing);
             return true;
         } else if (this.isHittingPosition(posBlock)) {
@@ -202,7 +253,7 @@ public class PlayerControllerMP {
                 this.isHittingBlock = false;
                 return false;
             } else {
-                this.curBlockDamageMP += block.getPlayerRelativeBlockHardness(this.mc.thePlayer, this.mc.thePlayer.worldObj, posBlock);
+                this.curBlockDamageMP += block.getPlayerRelativeBlockHardness(this.mc.thePlayer, this.mc.thePlayer.worldObj, posBlock) * (fastBreakActive ? fastBreak.speed.getValue().floatValue() : 1.0F);
 
                 if (this.stepSoundTickCounter % 4.0F == 0.0F) {
                     this.mc.getSoundHandler().playSound(new PositionedSoundRecord(new ResourceLocation(block.stepSound.getStepSound()), (block.stepSound.getVolume() + 1.0F) / 8.0F, block.stepSound.getFrequency() * 0.5F, (float) posBlock.getX() + 0.5F, (float) posBlock.getY() + 0.5F, (float) posBlock.getZ() + 0.5F));
@@ -212,11 +263,15 @@ public class PlayerControllerMP {
 
                 if (this.curBlockDamageMP >= 1.0F) {
                     this.isHittingBlock = false;
-                    this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.STOP_DESTROY_BLOCK, posBlock, directionFacing));
+                    if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                        this.send1_19PlayerAction(C07PacketPlayerDigging.Action.STOP_DESTROY_BLOCK, posBlock, directionFacing);
+                    } else {
+                        this.netClientHandler.addToSendQueue(new C07PacketPlayerDigging(C07PacketPlayerDigging.Action.STOP_DESTROY_BLOCK, posBlock, directionFacing));
+                    }
                     this.onPlayerDestroyBlock(posBlock, directionFacing);
                     this.curBlockDamageMP = 0.0F;
                     this.stepSoundTickCounter = 0.0F;
-                    this.blockHitDelay = 5;
+                    this.blockHitDelay = noBreakDelay ? 0 : 5;
                 }
 
                 this.mc.theWorld.sendBlockBreakProgress(this.mc.thePlayer.getEntityId(), this.currentBlock, (int) (this.curBlockDamageMP * 10.0F) - 1);
@@ -252,8 +307,20 @@ public class PlayerControllerMP {
         return pos.equals(this.currentBlock) && flag;
     }
 
-    private void syncCurrentPlayItem() {
+    public void syncCurrentPlayItem() {
         int i = this.mc.thePlayer.inventory.currentItem;
+
+        // LiquidBounce port: SilentHotbar support - send the enforced slot to the server
+        // while the client keeps its own selected slot.
+        if (dev.astra.util.inventory.SilentHotbar.isActive()) {
+            int enforced = dev.astra.util.inventory.SilentHotbar.getCurrentSlot();
+
+            if (enforced != this.currentPlayerItem) {
+                this.currentPlayerItem = enforced;
+                this.netClientHandler.addToSendQueue(new C09PacketHeldItemChange(enforced));
+            }
+            return;
+        }
 
         if (i != this.currentPlayerItem) {
             this.currentPlayerItem = i;
@@ -287,7 +354,24 @@ public class PlayerControllerMP {
                 }
             }
 
-            this.netClientHandler.addToSendQueue(new C08PacketPlayerBlockPlacement(hitPos, side.getIndex(), player.inventory.getCurrentItem(), f, f1, f2));
+            if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                PacketWrapper packet = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM_ON, Via.getManager().getConnectionManager().getConnections().iterator().next());
+                packet.write(Types.VAR_INT, 0);
+                packet.write(Types.BLOCK_POSITION1_14, new BlockPosition(hitPos.getX(), hitPos.getY(), hitPos.getZ()));
+                packet.write(Types.VAR_INT, side.ordinal());
+                packet.write(Types.FLOAT, Float.valueOf(f));
+                packet.write(Types.FLOAT, Float.valueOf(f1));
+                packet.write(Types.FLOAT, Float.valueOf(f2));
+                packet.write(Types.BOOLEAN, false);
+                packet.write(Types.VAR_INT, this.getSequenceId());
+                try {
+                    packet.sendToServer(Protocol1_18_2To1_19.class);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                this.netClientHandler.addToSendQueue(new C08PacketPlayerBlockPlacement(hitPos, side.getIndex(), player.inventory.getCurrentItem(), f, f1, f2));
+            }
 
             if (!flag && this.currentGameType != WorldSettings.GameType.SPECTATOR) {
                 if (heldStack == null) {
@@ -313,7 +397,18 @@ public class PlayerControllerMP {
             return false;
         } else {
             this.syncCurrentPlayItem();
-            this.netClientHandler.addToSendQueue(new C08PacketPlayerBlockPlacement(playerIn.inventory.getCurrentItem()));
+            if (ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_19)) {
+                PacketWrapper packet = PacketWrapper.create(ServerboundPackets1_19.USE_ITEM, Via.getManager().getConnectionManager().getConnections().iterator().next());
+                packet.write(Types.VAR_INT, 0);
+                packet.write(Types.VAR_INT, this.getSequenceId());
+                try {
+                    packet.sendToServer(Protocol1_18_2To1_19.class);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                this.netClientHandler.addToSendQueue(new C08PacketPlayerBlockPlacement(playerIn.inventory.getCurrentItem()));
+            }
             int i = itemStackIn.stackSize;
             ItemStack itemstack = itemStackIn.useItemRightClick(worldIn, playerIn);
 
@@ -338,6 +433,7 @@ public class PlayerControllerMP {
     public void attackEntity(EntityPlayer playerIn, Entity targetEntity) {
         this.syncCurrentPlayItem();
         this.netClientHandler.addToSendQueue(new C02PacketUseEntity(targetEntity, C02PacketUseEntity.Action.ATTACK));
+        dev.astra.Main.eventBus.post(new dev.astra.event.events.attack.AttackEntityEvent(targetEntity));
 
         if (this.currentGameType != WorldSettings.GameType.SPECTATOR) {
             playerIn.attackTargetEntityWithCurrentItem(targetEntity);

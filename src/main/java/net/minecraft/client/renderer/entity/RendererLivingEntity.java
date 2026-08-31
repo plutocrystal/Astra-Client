@@ -1,5 +1,9 @@
 package net.minecraft.client.renderer.entity;
 
+import dev.astra.util.rotation.RotationManager;
+import dev.astra.util.rotation.RotationUtils;
+import dev.astra.module.impl.fun.DinnerBone;
+import dev.astra.module.impl.render.HurtTime;
 import com.google.common.collect.Lists;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -112,7 +116,7 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
                 EntityPlayerSP spPlayer = null;
                 if (entity instanceof EntityPlayerSP) {
                     spPlayer = (EntityPlayerSP) entity;
-                    boolean rotMgrActive = entity == Minecraft.getMinecraft().thePlayer && dev.astra.utils.rotation.RotationManager.isActive();
+                    boolean rotMgrActive = entity == Minecraft.getMinecraft().thePlayer && RotationManager.isActive();
                     if ((rotMgrActive || spPlayer.visualActive) && dev.astra.Main.moduleManager != null) {
                         dev.astra.module.impl.render.Rotation rotModule = dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.Rotation.class);
                         if (rotModule != null && rotModule.isToggle()) {
@@ -123,8 +127,8 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
 
                 float f;
                 if (silentActive) {
-                    if (entity == Minecraft.getMinecraft().thePlayer && dev.astra.utils.rotation.RotationManager.isActive()) {
-                        f = this.interpolateRotation(dev.astra.utils.rotation.RotationManager.getPrevBodyYaw(), dev.astra.utils.rotation.RotationManager.getBodyYaw(), partialTicks);
+                    if (entity == Minecraft.getMinecraft().thePlayer && RotationManager.isActive()) {
+                        f = this.interpolateRotation(RotationManager.getPrevBodyYaw(), RotationManager.getBodyYaw(), partialTicks);
                     } else {
                         f = this.interpolateRotation(spPlayer.prevVisualBodyYaw, spPlayer.visualBodyYaw, partialTicks);
                     }
@@ -134,8 +138,8 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
                 
                 float f1;
                 if (silentActive) {
-                    if (entity == Minecraft.getMinecraft().thePlayer && dev.astra.utils.rotation.RotationManager.isActive()) {
-                        f1 = this.interpolateRotation(dev.astra.utils.rotation.RotationManager.getPrevYaw(), dev.astra.utils.rotation.RotationManager.getYaw(), partialTicks);
+                    if (entity == Minecraft.getMinecraft().thePlayer && RotationManager.isActive()) {
+                        f1 = this.interpolateRotation(RotationManager.getPrevYaw(), RotationManager.getYaw(), partialTicks);
                     } else {
                         f1 = this.interpolateRotation(spPlayer.prevVisualYaw, spPlayer.visualYaw, partialTicks);
                     }
@@ -170,8 +174,8 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
 
                 float f7;
                 if (silentActive) {
-                    if (entity == Minecraft.getMinecraft().thePlayer && dev.astra.utils.rotation.RotationManager.isActive()) {
-                        f7 = dev.astra.utils.rotation.RotationManager.getPrevPitch() + (dev.astra.utils.rotation.RotationManager.getPitch() - dev.astra.utils.rotation.RotationManager.getPrevPitch()) * partialTicks;
+                    if (entity == Minecraft.getMinecraft().thePlayer && RotationManager.isActive()) {
+                        f7 = RotationManager.getPrevPitch() + (RotationManager.getPitch() - RotationManager.getPrevPitch()) * partialTicks;
                     } else {
                         f7 = spPlayer.prevVisualPitch + (spPlayer.visualPitch - spPlayer.prevVisualPitch) * partialTicks;
                     }
@@ -330,7 +334,8 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
 
     protected void renderModel(T entitylivingbaseIn, float p_77036_2_, float p_77036_3_, float p_77036_4_, float p_77036_5_, float p_77036_6_, float scaleFactor) {
         boolean flag = !entitylivingbaseIn.isInvisible();
-        boolean flag1 = !flag && !entitylivingbaseIn.isInvisibleToPlayer(Minecraft.getMinecraft().thePlayer);
+        dev.astra.module.impl.render.TrueSight trueSight = dev.astra.Main.moduleManager != null ? dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.TrueSight.class) : null;
+        boolean flag1 = !flag && (!entitylivingbaseIn.isInvisibleToPlayer(Minecraft.getMinecraft().thePlayer) || (trueSight != null && trueSight.isToggle() && trueSight.entities.isEnabled()));
 
         if (flag || flag1) {
             if (!this.bindEntityTexture(entitylivingbaseIn)) {
@@ -399,13 +404,14 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
             this.brightnessBuffer.position(0);
 
             if (flag1) {
-                this.brightnessBuffer.put(1.0F);
-                this.brightnessBuffer.put(0.0F);
-                this.brightnessBuffer.put(0.0F);
-                this.brightnessBuffer.put(0.3F);
+                float[] hurtColor = HurtTime.getHurtColor();
+                this.brightnessBuffer.put(hurtColor[0]);
+                this.brightnessBuffer.put(hurtColor[1]);
+                this.brightnessBuffer.put(hurtColor[2]);
+                this.brightnessBuffer.put(hurtColor[3]);
 
                 if (Config.isShaders()) {
-                    Shaders.setEntityColor(1.0F, 0.0F, 0.0F, 0.3F);
+                    Shaders.setEntityColor(hurtColor[0], hurtColor[1], hurtColor[2], hurtColor[3]);
                 }
             } else {
                 float f1 = (float) (i >> 24 & 255) / 255.0F;
@@ -505,6 +511,9 @@ public abstract class RendererLivingEntity<T extends EntityLivingBase> extends R
             String s = EnumChatFormatting.getTextWithoutFormattingCodes(bat.getName());
 
             if (s != null && (s.equals("Dinnerbone") || s.equals("Grumm")) && (!(bat instanceof EntityPlayer) || ((EntityPlayer) bat).isWearing(EnumPlayerModelParts.CAPE))) {
+                GlStateManager.translate(0.0F, bat.height + 0.1F, 0.0F);
+                GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
+            } else if (DinnerBone.isEnabled()) {
                 GlStateManager.translate(0.0F, bat.height + 0.1F, 0.0F);
                 GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
             }

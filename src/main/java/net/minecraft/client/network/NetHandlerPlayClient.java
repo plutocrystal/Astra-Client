@@ -7,8 +7,9 @@ import com.mojang.authlib.GameProfile;
 import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
 import de.florianmichael.vialoadingbase.ViaLoadingBase;
 import dev.astra.Main;
-import dev.astra.event.events.EventPacketReceive;
-import dev.astra.event.events.EventPacketSend;
+import dev.astra.module.impl.misc.ClientSpoofer;
+import dev.astra.event.events.packet.PacketReceiveEvent;
+import dev.astra.event.events.packet.PacketSendEvent;
 import io.netty.buffer.Unpooled;
 import net.minecraft.block.Block;
 import net.minecraft.client.ClientBrandRetriever;
@@ -104,7 +105,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleJoinGame(S01PacketJoinGame packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -119,11 +120,24 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
         this.gameController.thePlayer.setReducedDebug(packetIn.isReducedDebugInfo());
         this.gameController.playerController.setGameType(packetIn.getGameType());
         this.gameController.gameSettings.sendSettingsToServer();
-        this.netManager.sendPacket(new C17PacketCustomPayload("MC|Brand", (new PacketBuffer(Unpooled.buffer())).writeString(ClientBrandRetriever.getClientModName())));
+        this.netManager.sendPacket(new C17PacketCustomPayload("MC|Brand", (new PacketBuffer(Unpooled.buffer())).writeString(getSpoofedBrand())));
+    }
+    
+    private String getSpoofedBrand() {
+        try {
+            ClientSpoofer spoofer =
+                    dev.astra.Main.moduleManager.getModuleByClass(ClientSpoofer.class);
+            if (spoofer != null && spoofer.isToggle()) {
+                String brand = spoofer.getBrand();
+                if (brand != null) return brand;
+            }
+        } catch (Exception ignored) {
+        }
+        return ClientBrandRetriever.getClientModName();
     }
 
     public void handleSpawnObject(S0EPacketSpawnObject packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -224,7 +238,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSpawnExperienceOrb(S11PacketSpawnExperienceOrb packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -239,7 +253,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSpawnGlobalEntity(S2CPacketSpawnGlobalEntity packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -264,7 +278,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSpawnPainting(S10PacketSpawnPainting packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -273,7 +287,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityVelocity(S12PacketEntityVelocity packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -285,7 +299,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityMetadata(S1CPacketEntityMetadata packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -297,7 +311,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSpawnPlayer(S0CPacketSpawnPlayer packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -328,7 +342,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityTeleport(S18PacketEntityTeleport packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -355,18 +369,22 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleHeldItemChange(S09PacketHeldItemChange packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
 
         if (packetIn.getHeldItemHotbarIndex() >= 0 && packetIn.getHeldItemHotbarIndex() < InventoryPlayer.getHotbarSize()) {
+            // LiquidBounce port: let SilentHotbar decide whether the silent slot should stay enforced
+            if (dev.astra.util.inventory.SilentHotbar.handleServerSlotChange(packetIn.getHeldItemHotbarIndex())) {
+                return;
+            }
             this.gameController.thePlayer.inventory.currentItem = packetIn.getHeldItemHotbarIndex();
         }
     }
 
     public void handleEntityMovement(S14PacketEntity packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -387,7 +405,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityHeadLook(S19PacketEntityHeadLook packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -400,7 +418,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleDestroyEntities(S13PacketDestroyEntities packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -411,7 +429,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handlePlayerPosLook(S08PacketPlayerPosLook packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -461,7 +479,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleMultiBlockChange(S22PacketMultiBlockChange packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -472,7 +490,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleChunkData(S21PacketChunkData packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -497,7 +515,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleBlockChange(S23PacketBlockChange packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -505,7 +523,11 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleDisconnect(S40PacketDisconnect packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        if (!this.gameController.isCallingFromMinecraftThread()) {
+            this.gameController.addScheduledTask(() -> handleDisconnect(packetIn));
+            return;
+        }
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         this.netManager.closeChannel(packetIn.getReason());
@@ -526,14 +548,18 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void addToSendQueue(Packet p_147297_1_) {
-        EventPacketSend event = new EventPacketSend(p_147297_1_);
+        PacketSendEvent event = new PacketSendEvent(p_147297_1_);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         this.netManager.sendPacket(event.getPacket());
     }
 
+    public void sendPacketNoEvent(Packet packet) {
+        this.netManager.sendPacket(packet);
+    }
+
     public void handleCollectItem(S0DPacketCollectItem packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -557,7 +583,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleChat(S02PacketChat packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -570,7 +596,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleAnimation(S0BPacketAnimation packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -594,7 +620,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleUseBed(S0APacketUseBed packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -602,7 +628,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSpawnMob(S0FPacketSpawnMob packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -640,16 +666,20 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleTimeUpdate(S03PacketTimeUpdate packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
         this.gameController.theWorld.setTotalWorldTime(packetIn.getTotalWorldTime());
         this.gameController.theWorld.setWorldTime(packetIn.getWorldTime());
+
+        if (dev.astra.module.impl.render.Ambience.isTimeForced()) {
+            this.gameController.theWorld.setWorldTime(dev.astra.module.impl.render.Ambience.getForcedTime());
+        }
     }
 
     public void handleSpawnPosition(S05PacketSpawnPosition packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -658,7 +688,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityAttach(S1BPacketEntityAttach packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -700,7 +730,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityStatus(S19PacketEntityStatus packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -716,7 +746,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleUpdateHealth(S06PacketUpdateHealth packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -726,7 +756,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSetExperience(S1FPacketSetExperience packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -734,7 +764,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleRespawn(S07PacketRespawn packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -754,7 +784,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleExplosion(S27PacketExplosion packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -766,7 +796,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleOpenWindow(S2DPacketOpenWindow packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -796,7 +826,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSetSlot(S2FPacketSetSlot packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -827,7 +857,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleConfirmTransaction(S32PacketConfirmTransaction packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -850,7 +880,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleWindowItems(S30PacketWindowItems packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -864,7 +894,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSignEditorOpen(S36PacketSignEditorOpen packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -880,7 +910,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleUpdateSign(S33PacketUpdateSign packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -907,7 +937,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleUpdateTileEntity(S35PacketUpdateTileEntity packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -923,7 +953,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleWindowProperty(S31PacketWindowProperty packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -935,7 +965,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityEquipment(S04PacketEntityEquipment packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -947,7 +977,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleCloseWindow(S2EPacketCloseWindow packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -955,7 +985,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleBlockAction(S24PacketBlockAction packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -963,7 +993,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleBlockBreakAnim(S25PacketBlockBreakAnim packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -971,7 +1001,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleMapChunkBulk(S26PacketMapChunkBulk packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -992,7 +1022,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleChangeGameState(S2BPacketChangeGameState packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1006,11 +1036,15 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
         }
 
         if (i == 1) {
-            this.clientWorldController.getWorldInfo().setRaining(true);
-            this.clientWorldController.setRainStrength(0.0F);
+            if (!dev.astra.module.impl.render.Ambience.isWeatherForced()) {
+                this.clientWorldController.getWorldInfo().setRaining(true);
+                this.clientWorldController.setRainStrength(0.0F);
+            }
         } else if (i == 2) {
-            this.clientWorldController.getWorldInfo().setRaining(false);
-            this.clientWorldController.setRainStrength(1.0F);
+            if (!dev.astra.module.impl.render.Ambience.isWeatherForced()) {
+                this.clientWorldController.getWorldInfo().setRaining(false);
+                this.clientWorldController.setRainStrength(1.0F);
+            }
         } else if (i == 3) {
             this.gameController.playerController.setGameType(WorldSettings.GameType.getByID(j));
         } else if (i == 4) {
@@ -1030,9 +1064,13 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
         } else if (i == 6) {
             this.clientWorldController.playSound(entityplayer.posX, entityplayer.posY + (double) entityplayer.getEyeHeight(), entityplayer.posZ, "random.successful_hit", 0.18F, 0.45F, false);
         } else if (i == 7) {
-            this.clientWorldController.setRainStrength(f);
+            if (!dev.astra.module.impl.render.Ambience.isWeatherForced()) {
+                this.clientWorldController.setRainStrength(f);
+            }
         } else if (i == 8) {
-            this.clientWorldController.setThunderStrength(f);
+            if (!dev.astra.module.impl.render.Ambience.isWeatherForced()) {
+                this.clientWorldController.setThunderStrength(f);
+            }
         } else if (i == 10) {
             this.clientWorldController.spawnParticle(EnumParticleTypes.MOB_APPEARANCE, entityplayer.posX, entityplayer.posY, entityplayer.posZ, 0.0D, 0.0D, 0.0D);
             this.clientWorldController.playSound(entityplayer.posX, entityplayer.posY, entityplayer.posZ, "mob.guardian.curse", 1.0F, 1.0F, false);
@@ -1040,7 +1078,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleMaps(S34PacketMaps packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1050,7 +1088,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEffect(S28PacketEffect packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1063,7 +1101,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleStatistics(S37PacketStatistics packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1103,7 +1141,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityEffect(S1DPacketEntityEffect packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1117,7 +1155,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleCombatEvent(S42PacketCombatEvent packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1140,7 +1178,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleServerDifficulty(S41PacketServerDifficulty packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1149,7 +1187,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleCamera(S43PacketCamera packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1161,7 +1199,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleWorldBorder(S44PacketWorldBorder packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1170,7 +1208,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
 
     @SuppressWarnings("incomplete-switch")
     public void handleTitle(S45PacketTitle packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1198,7 +1236,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSetCompressionLevel(S46PacketSetCompressionLevel packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         if (!this.netManager.isLocalChannel()) {
@@ -1207,7 +1245,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handlePlayerListHeaderFooter(S47PacketPlayerListHeaderFooter packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         this.gameController.ingameGUI.getTabList().setHeader(packetIn.getHeader().getFormattedText().length() == 0 ? null : packetIn.getHeader());
@@ -1215,7 +1253,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleRemoveEntityEffect(S1EPacketRemoveEntityEffect packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1228,7 +1266,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
 
     @SuppressWarnings("incomplete-switch")
     public void handlePlayerListItem(S38PacketPlayerListItem packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1268,14 +1306,14 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleKeepAlive(S00PacketKeepAlive packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         this.addToSendQueue(new C00PacketKeepAlive(packetIn.func_149134_c()));
     }
 
     public void handlePlayerAbilities(S39PacketPlayerAbilities packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1289,7 +1327,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleTabComplete(S3APacketTabComplete packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1302,7 +1340,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleSoundEffect(S29PacketSoundEffect packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1310,7 +1348,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleResourcePack(S48PacketResourcePackSend packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         final String s = packetIn.getURL();
@@ -1390,7 +1428,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityNBT(S49PacketUpdateEntityNBT packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1402,7 +1440,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleCustomPayload(S3FPacketCustomPayload packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1436,7 +1474,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleScoreboardObjective(S3BPacketScoreboardObjective packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1459,7 +1497,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleUpdateScore(S3CPacketUpdateScore packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1479,7 +1517,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleDisplayScoreboard(S3DPacketDisplayScoreboard packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1494,7 +1532,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleTeams(S3EPacketTeams packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1528,7 +1566,9 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
 
         if (packetIn.getAction() == 4) {
             for (String s1 : packetIn.getPlayers()) {
-                scoreboard.removePlayerFromTeam(s1, scoreplayerteam);
+                if (scoreboard.getPlayersTeam(s1) == scoreplayerteam) {
+                    scoreboard.removePlayerFromTeam(s1, scoreplayerteam);
+                }
             }
         }
 
@@ -1538,7 +1578,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleParticles(S2APacketParticles packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);
@@ -1573,7 +1613,7 @@ public class NetHandlerPlayClient implements INetHandlerPlayClient {
     }
 
     public void handleEntityProperties(S20PacketEntityProperties packetIn) {
-        EventPacketReceive event = new EventPacketReceive(packetIn);
+        PacketReceiveEvent event = new PacketReceiveEvent(packetIn);
         Main.eventBus.post(event);
         if (event.isCancelled()) return;
         PacketThreadUtil.checkThreadAndEnqueue(packetIn, this, this.gameController);

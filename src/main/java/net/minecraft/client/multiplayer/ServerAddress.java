@@ -69,6 +69,7 @@ public class ServerAddress {
             Hashtable hashtable = new Hashtable();
             hashtable.put("java.naming.factory.initial", "com.sun.jndi.dns.DnsContextFactory");
             hashtable.put("java.naming.provider.url", "dns:");
+            hashtable.put("com.sun.jndi.dns.timeout.initial", "2000");
             hashtable.put("com.sun.jndi.dns.timeout.retries", "1");
             DirContext dircontext = new InitialDirContext(hashtable);
             Attributes attributes = dircontext.getAttributes("_minecraft._tcp." + p_78863_0_, new String[]{"SRV"});

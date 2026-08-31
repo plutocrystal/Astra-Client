@@ -5,7 +5,6 @@ import dev.astra.module.Module;
 import org.lwjgl.input.Keyboard;
 
 public class CameraClip extends Module {
-
     public CameraClip() {
         super("CameraClip", Keyboard.KEY_NONE, Category.RENDER);
     }

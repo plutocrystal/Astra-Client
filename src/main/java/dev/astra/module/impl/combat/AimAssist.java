@@ -1,10 +1,11 @@
 package dev.astra.module.impl.combat;
 
 import dev.astra.event.EventHandler;
-import dev.astra.event.events.Render3DEvent;
+import dev.astra.event.events.render.Render3DEvent;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
-import dev.astra.utils.rotation.RotationUtils;
+import dev.astra.module.impl.misc.Teams;
+import dev.astra.util.rotation.RotationUtils;
 import dev.astra.value.impl.BooleanValue;
 import dev.astra.value.impl.NumberValue;
 import net.minecraft.block.material.Material;
@@ -18,20 +19,25 @@ import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import org.lwjgl.input.Keyboard;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class AimAssist extends Module {
-
     public final NumberValue range = new NumberValue("Range", 4.5, 1.0, 6.0, 0.1);
+
     public final NumberValue speed = new NumberValue("Speed", 5.0, 1.0, 10.0, 0.5);
+
     public final NumberValue fov = new NumberValue("FOV", 90.0, 15.0, 180.0, 5.0);
+
     public final BooleanValue throughWalls = new BooleanValue("ThroughWalls", false);
+
     public final BooleanValue smoothPitch = new BooleanValue("SmoothPitch", true);
+
     public final BooleanValue clickAim = new BooleanValue("ClickAim", true);
+
     public final BooleanValue weaponOnly = new BooleanValue("WeaponOnly", false);
+
     public final BooleanValue breakBlocks = new BooleanValue("BreakBlocks", true);
 
     private long lastClickTime = 0L;
@@ -44,14 +50,12 @@ public class AimAssist extends Module {
     @EventHandler
     public void onRender3D(Render3DEvent event) {
         if (mc.thePlayer == null || mc.theWorld == null) return;
-
         if (breakBlocks.getValue() && mc.gameSettings.keyBindAttack.isKeyDown() && mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
             BlockPos pos = mc.objectMouseOver.getBlockPos();
             if (pos != null && mc.theWorld.getBlockState(pos).getBlock().getMaterial() != Material.air) {
                 return;
             }
         }
-
         if (clickAim.getValue()) {
             if (mc.gameSettings.keyBindAttack.isKeyDown()) {
                 lastClickTime = System.currentTimeMillis();
@@ -60,35 +64,27 @@ public class AimAssist extends Module {
                 return;
             }
         }
-
         if (weaponOnly.getValue()) {
             if (mc.thePlayer.getHeldItem() == null) return;
             if (!(mc.thePlayer.getHeldItem().getItem() instanceof ItemSword) && !(mc.thePlayer.getHeldItem().getItem() instanceof ItemTool)) {
                 return;
             }
         }
-
         EntityLivingBase target = getTarget();
         if (target == null) return;
-
         double diffX = target.posX - mc.thePlayer.posX;
         double diffY = target.posY + (target.height / 2.0) - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
         double diffZ = target.posZ - mc.thePlayer.posZ;
         double dist = Math.sqrt(diffX * diffX + diffZ * diffZ);
-
         float targetYaw = (float) (Math.toDegrees(Math.atan2(diffZ, diffX)) - 90.0F);
         float targetPitch = (float) -Math.toDegrees(Math.atan2(diffY, dist));
-
         float yawDiff = MathHelper.wrapAngleTo180_float(targetYaw - mc.thePlayer.rotationYaw);
         float pitchDiff = targetPitch - mc.thePlayer.rotationPitch;
-
         double smoothness = 1.0 - (speed.getValue() / 10.0);
         if (smoothness < 0) smoothness = 0;
-
         float finalYaw = mc.thePlayer.rotationYaw + (float) (yawDiff * (1.0 - smoothness));
         finalYaw = RotationUtils.applyGCD(finalYaw, mc.thePlayer.rotationYaw);
         mc.thePlayer.rotationYaw = finalYaw;
-
         if (smoothPitch.getValue()) {
             float finalPitch = mc.thePlayer.rotationPitch + (float) (pitchDiff * (1.0 - smoothness));
             finalPitch = RotationUtils.applyGCD(finalPitch, mc.thePlayer.rotationPitch);
@@ -103,23 +99,20 @@ public class AimAssist extends Module {
                 .filter(this::isValidTarget)
                 .sorted(Comparator.comparingDouble(e -> mc.thePlayer.getDistanceToEntity(e)))
                 .collect(Collectors.toList());
-
         return entities.isEmpty() ? null : entities.get(0);
     }
 
     private boolean isValidTarget(EntityLivingBase e) {
         boolean isDead = e.isDead || e.getHealth() <= 0 || e.deathTime > 0;
         if (isDead && !Target.dead.getValue()) return false;
-        
         if (!isDead && Target.dead.getValue() && !Target.players.getValue() && !Target.mobs.getValue() && !Target.animals.getValue()) {
             return false;
         }
-
+        if (Teams.isInYourTeam(e)) return false;
         if (mc.thePlayer.getDistanceToEntity(e) > range.getValue()) return false;
-
         if (e instanceof EntityPlayer) {
             if (!Target.players.getValue()) return false;
-            if (!Target.friends.getValue() && dev.astra.utils.FriendManager.isFriend(e.getName())) return false;
+            if (!Target.friends.getValue() && dev.astra.util.FriendManager.isFriend(e.getName())) return false;
         } else if (e instanceof EntityMob) {
             if (!Target.mobs.getValue()) return false;
         } else if (e instanceof EntityAnimal) {
@@ -127,17 +120,13 @@ public class AimAssist extends Module {
         } else {
             return false;
         }
-
         if (e.isInvisible() && !Target.invisible.getValue()) return false;
-
         double diffX = e.posX - mc.thePlayer.posX;
         double diffZ = e.posZ - mc.thePlayer.posZ;
         float targetYaw = (float) (Math.toDegrees(Math.atan2(diffZ, diffX)) - 90.0F);
         float yawDiff = MathHelper.wrapAngleTo180_float(targetYaw - mc.thePlayer.rotationYaw);
         if (Math.abs(yawDiff) > fov.getValue() / 2.0f) return false;
-
         if (!throughWalls.getValue() && !mc.thePlayer.canEntityBeSeen(e)) return false;
-
         return true;
     }
 }

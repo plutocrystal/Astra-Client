@@ -3,12 +3,10 @@ package dev.astra.command.impl;
 import dev.astra.command.Command;
 import dev.astra.config.ConfigManager;
 import dev.astra.util.ChatUtil;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class ConfigCommand implements Command {
-
     @Override
     public String[] getAliases() {
         return new String[]{"config"};
@@ -20,7 +18,6 @@ public class ConfigCommand implements Command {
             ChatUtil.sendMessage("Usage: .config <save/load/list> <name>");
             return;
         }
-
         String action = args[0].toLowerCase();
         if (action.equals("save") && args.length == 2) {
             if (ConfigManager.saveConfig(args[1])) {

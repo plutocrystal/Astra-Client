@@ -5,12 +5,10 @@ import dev.astra.command.Command;
 import dev.astra.module.Module;
 import dev.astra.util.ChatUtil;
 import org.lwjgl.input.Keyboard;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class BindCommand implements Command {
-
     @Override
     public String[] getAliases() {
         return new String[]{"bind"};
@@ -22,11 +20,9 @@ public class BindCommand implements Command {
             ChatUtil.sendMessage("Usage: .bind <module> <key>");
             return;
         }
-
         String moduleName = args[0];
         String keyName = args[1].toUpperCase();
         int key = Keyboard.getKeyIndex(keyName);
-
         for (Module module : Main.moduleManager.getModules()) {
             if (module.getName().equalsIgnoreCase(moduleName)) {
                 module.setKeycode(key);
@@ -34,7 +30,6 @@ public class BindCommand implements Command {
                 return;
             }
         }
-
         ChatUtil.sendMessage("Module not found: " + moduleName);
     }
 

@@ -5,7 +5,6 @@ import dev.astra.module.Module;
 import org.lwjgl.input.Keyboard;
 
 public class NoToasts extends Module {
-
     public static NoToasts INSTANCE;
 
     public NoToasts() {

@@ -1,10 +1,15 @@
 package net.minecraft.client.gui;
 
+import dev.astra.module.impl.render.ClientSettings;
+import dev.astra.util.RenderUtil;
+import dev.astra.util.SoundUtil;
+import dev.astra.Main;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.audio.SoundHandler;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.util.ResourceLocation;
+import java.awt.Color;
 
 public class GuiButton extends Gui {
     protected static final ResourceLocation buttonTextures = new ResourceLocation("textures/gui/widgets.png");
@@ -47,27 +52,40 @@ public class GuiButton extends Gui {
         return i;
     }
 
+    private int getHoverColor(Color color, double addBrightness) {
+        if (this.hovered) {
+            float[] hsb = Color.RGBtoHSB(color.getRed(), color.getGreen(), color.getBlue(), null);
+            float b = (float) Math.max(0, Math.min(1.0, hsb[2] + addBrightness));
+            return Color.HSBtoRGB(hsb[0], hsb[1], b);
+        }
+        return color.getRGB();
+    }
+
     public void drawButton(Minecraft mc, int mouseX, int mouseY) {
         if (this.visible) {
             FontRenderer fontrenderer = mc.fontRendererObj;
-            mc.getTextureManager().bindTexture(buttonTextures);
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
             this.hovered = mouseX >= this.xPosition && mouseY >= this.yPosition && mouseX < this.xPosition + this.width && mouseY < this.yPosition + this.height;
-            int i = this.getHoverState(this.hovered);
             GlStateManager.enableBlend();
             GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
             GlStateManager.blendFunc(770, 771);
-            this.drawTexturedModalRect(this.xPosition, this.yPosition, 0, 46 + i * 20, this.width / 2, this.height);
-            this.drawTexturedModalRect(this.xPosition + this.width / 2, this.yPosition, 200 - this.width / 2, 46 + i * 20, this.width / 2, this.height);
+            if (ClientSettings.useAugustusStyle()) {
+                int color = ClientSettings.getButtonColor();
+                float radius = ClientSettings.getButtonCornerRadius();
+                RenderUtil.drawRoundedRect(this.xPosition, this.yPosition, this.xPosition + this.width, this.yPosition + this.height, radius, this.getHoverColor(new Color(color, true), -0.2));
+            } else {
+                mc.getTextureManager().bindTexture(buttonTextures);
+                GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+                int i = this.getHoverState(this.hovered);
+                this.drawTexturedModalRect(this.xPosition, this.yPosition, 0, 46 + i * 20, this.width / 2, this.height);
+                this.drawTexturedModalRect(this.xPosition + this.width / 2, this.yPosition, 200 - this.width / 2, 46 + i * 20, this.width / 2, this.height);
+            }
             this.mouseDragged(mc, mouseX, mouseY);
             int j = 14737632;
-
             if (!this.enabled) {
                 j = 10526880;
             } else if (this.hovered) {
                 j = 16777120;
             }
-
             this.drawCenteredString(fontrenderer, this.displayString, this.xPosition + this.width / 2, this.yPosition + (this.height - 8) / 2, j);
         }
     }
@@ -90,7 +108,12 @@ public class GuiButton extends Gui {
     }
 
     public void playPressSound(SoundHandler soundHandlerIn) {
-        soundHandlerIn.playSound(PositionedSoundRecord.create(new ResourceLocation("gui.button.press"), 1.0F));
+        float volume = ClientSettings.getSoundVolume();
+        if (ClientSettings.useAstraButtonSound()) {
+            SoundUtil.playSound("astra.snd:astra.button.click", volume);
+        } else {
+            soundHandlerIn.playSound(PositionedSoundRecord.create(new ResourceLocation("gui.button.press"), volume));
+        }
     }
 
     public int getButtonWidth() {

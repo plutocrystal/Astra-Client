@@ -1,10 +1,9 @@
-package dev.astra.utils.rotation;
+package dev.astra.util.rotation;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.MathHelper;
 
 public class RotationManager {
-
     public enum MoveFix {
         None, Strict, Silent
     }
@@ -14,33 +13,59 @@ public class RotationManager {
     }
 
     private static float serverYaw;
+
     private static float serverPitch;
+
     private static float prevYaw;
+
     private static float prevPitch;
+
     private static boolean active = false;
+
     private static float bodyYaw;
+
     private static float prevBodyYaw;
+
     private static boolean initialized = false;
+
     public static boolean showVisual = false;
+
     private static MoveFix moveFix = MoveFix.None;
+
     private static RotationMode rotationMode = RotationMode.Silent;
 
     public static void setRotation(float yaw, float pitch, MoveFix fix) {
         setRotation(yaw, pitch, fix, RotationMode.Silent);
     }
 
+    public static MoveFix parseMoveFix(String value) {
+        if ("Strict".equals(value)) return MoveFix.Strict;
+        if ("Silent".equals(value)) return MoveFix.Silent;
+        return MoveFix.None;
+    }
+
+    public static RotationMode parseRotationMode(String value) {
+        if ("LockView".equals(value)) return RotationMode.LockView;
+        if ("Silent".equals(value)) return RotationMode.Silent;
+        return RotationMode.None;
+    }
+
     public static void setRotation(float yaw, float pitch, MoveFix fix, RotationMode mode) {
         Minecraft mc = Minecraft.getMinecraft();
         if (mc.thePlayer == null) return;
-
+        if (mode == RotationMode.None) {
+            clearRotation();
+            return;
+        }
         yaw = MathHelper.wrapAngleTo180_float(yaw);
         if (pitch > 90.0F) pitch = 90.0F;
         if (pitch < -90.0F) pitch = -90.0F;
-
         if (!initialized) {
-            prevYaw = mc.thePlayer.rotationYaw;
-            prevPitch = mc.thePlayer.rotationPitch;
-            bodyYaw = mc.thePlayer.rotationYaw;
+            serverYaw = mc.thePlayer.rotationYaw;
+            serverPitch = mc.thePlayer.rotationPitch;
+            prevYaw = serverYaw;
+            prevPitch = serverPitch;
+            bodyYaw = serverYaw;
             prevBodyYaw = bodyYaw;
             initialized = true;
         } else {
@@ -48,13 +73,11 @@ public class RotationManager {
             prevPitch = serverPitch;
             prevBodyYaw = bodyYaw;
         }
-
-        serverYaw = yaw;
+        serverYaw += MathHelper.wrapAngleTo180_float(yaw - serverYaw);
         serverPitch = pitch;
         active = true;
         moveFix = fix;
         rotationMode = mode;
-
         double d0 = MathHelper.wrapAngleTo180_double(serverYaw - bodyYaw);
         bodyYaw += d0 * 0.3D;
         double d1 = MathHelper.wrapAngleTo180_double(serverYaw - bodyYaw);
@@ -68,25 +91,10 @@ public class RotationManager {
         initialized = false;
         moveFix = MoveFix.None;
         rotationMode = RotationMode.Silent;
-    }
-
-    public static float[] fixMovement(float forward, float strafe, float visualYaw) {
-        if (!active || moveFix == MoveFix.None) {
-            return new float[]{forward, strafe};
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.thePlayer != null) {
+            mc.thePlayer.visualActive = false;
         }
-
-        if (forward == 0.0F && strafe == 0.0F) {
-            return new float[]{0.0F, 0.0F};
-        }
-
-        float diffRad = (serverYaw - visualYaw) * 0.017453292F;
-        float cosDiff = MathHelper.cos(diffRad);
-        float sinDiff = MathHelper.sin(diffRad);
-
-        float newStrafe = strafe * cosDiff - forward * sinDiff;
-        float newForward = strafe * sinDiff + forward * cosDiff;
-
-        return new float[]{newForward, newStrafe};
     }
 
     public static boolean isActive() {

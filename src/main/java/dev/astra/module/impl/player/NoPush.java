@@ -5,7 +5,6 @@ import dev.astra.module.Module;
 import org.lwjgl.input.Keyboard;
 
 public class NoPush extends Module {
-
     public static NoPush INSTANCE;
 
     public NoPush() {

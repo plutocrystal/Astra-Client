@@ -3,9 +3,13 @@ package dev.astra.gui;
 import dev.astra.Main;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
+import dev.astra.util.RenderUtil;
+import dev.astra.util.customfont.CustomFont;
+import dev.astra.util.customfont.Fonts;
 import dev.astra.value.Value;
 import dev.astra.value.impl.BooleanValue;
 import dev.astra.value.impl.ColorValue;
+import dev.astra.value.impl.GroupValue;
 import dev.astra.value.impl.ModeValue;
 import dev.astra.value.impl.MultiBooleanValue;
 import dev.astra.value.impl.NumberValue;
@@ -14,10 +18,10 @@ import dev.astra.value.impl.TextValue;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
-
 import java.awt.Color;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -27,80 +31,148 @@ import java.util.List;
 import java.util.Map;
 
 public class ClickGuiScreen extends GuiScreen {
-
     private static final Color COLOR_BACKGROUND = new Color(25, 25, 25, 180);
+
     private static final Color COLOR_HEADER = new Color(34, 34, 34);
+
     private static final Color COLOR_TEXT_FIELD_BG = new Color(34, 34, 34);
+
     private static final Color COLOR_TEXT_FIELD_FG = new Color(45, 45, 45, 200);
+
     private static final Color COLOR_SLIDER_BG = new Color(34, 34, 34);
+
     private static final Color COLOR_SEPARATOR = new Color(34, 34, 34);
+
     private static final Color COLOR_TEXT_PRIMARY = new Color(200, 200, 200);
+
     private static final Color COLOR_TEXT_SECONDARY = new Color(180, 180, 180);
+
     private static final Color COLOR_TEXT_HOVER = new Color(220, 220, 220);
+
     private static final Color COLOR_TEXT_PLACEHOLDER = new Color(120, 120, 120);
+
     private static final Color COLOR_ENABLED = new Color(0, 180, 0);
+
     private static final Color COLOR_DISABLED = new Color(180, 0, 0);
+
     private static final Color COLOR_INDICATOR_WHITE = Color.WHITE;
+
     private static final Color COLOR_INDICATOR_BLACK = Color.BLACK;
+
     private static final Color COLOR_WIN11_CLOSE_HOVER = new Color(196, 43, 28);
+
     private static final Color COLOR_WIN11_BTN_HOVER = new Color(255, 255, 255, 15);
 
+    private static final Color COLOR_GROUP_ARROW = new Color(255, 215, 0);
+
     private static final float WIDTH = 500.0f;
+
     private static final float HEIGHT = 300.0f;
+
     private static final float HEADER_HEIGHT = 17.0f;
+
     private static final float CATEGORY_OFFSET_X = 90.0f;
+
     private static final float MODULE_LIST_WIDTH = 90.0f;
+
     private static final float VALUE_AREA_OFFSET_X = 100.0f;
+
     private static final float TEXT_FIELD_WIDTH = 100.0f;
+
     private static final float SLIDER_WIDTH = 98.0f;
+
     private static final float SLIDER_HEIGHT = 10.0f;
+
     private static final float COLOR_PICKER_WIDTH = 100.0f;
+
     private static final float COLOR_PICKER_HEIGHT = 50.0f;
+
     private static final float HUE_SLIDER_HEIGHT = 5.0f;
+
     private static final float ALPHA_SLIDER_HEIGHT = 5.0f;
+
     private static final float COLOR_PREVIEW_SIZE = 20.0f;
+
     private static final float SCROLL_SPEED = 0.1f;
+
     private static final float ANIMATION_SPEED_GUI = 8.0f;
+
     private static final float MAX_DELTA_TIME = 0.1f;
+
     private static final float WIN11_BUTTON_WIDTH = 35.0f;
 
+    private static final float CORNER_RADIUS = 8.0f;
+
     private static float persistentPosX = 150.0f;
+
     private static float persistentPosY = 80.0f;
+
     private static boolean persistentIsMaximized = false;
+
     private static Category persistentSelectedCategory = null;
+
     private static String persistentSelectedModuleName = null;
 
+    private static float persistentValueScroll = 0.0f;
+
+    private static float persistentModuleScroll = 0.0f;
+
     private boolean dragging = false;
+
     private boolean waitingForKey = false;
+
     private boolean draggingSlider = false;
+
     private boolean isMaximized = false;
+
     private float savedPosX, savedPosY, savedWidth, savedHeight;
 
     private float guiOpenAnimation = 0.0f;
+
     private long lastAnimationTime = System.currentTimeMillis();
+
     private float draggingX;
+
     private float draggingY;
+
     private float posX = 150.0f;
+
     private float posY = 80.0f;
+
     private float currentWidth = WIDTH;
+
     private float currentHeight = HEIGHT;
+
     private float valueScroll = 0.0f;
+
     private float moduleScroll = 0.0f;
 
     private Module selectedModule;
+
     private Category selectedCategory = null;
+
     private NumberValue currentDraggingSlider = null;
+
     private RangeSelectionNumberValue currentDraggingRange = null;
+
     private boolean draggingRangeMin = false;
+
     private boolean draggingRangeMax = false;
+
     private float lastDragMouseX = 0.0f;
+
     private boolean rangeDragDirectionDecided = false;
 
+    private float currentValueIndent = 0.0f;
+
     private final HashMap<TextValue, GuiTextField> textFieldMap = new HashMap<>();
+
     private final Map<ColorValue, ColorPickerState> colorPickerStates = new HashMap<>();
+
     private final HashMap<NumberValue, Float> numberSettingMap = new HashMap<>();
 
     private float categoryLineAnimation = 0.0f;
+
     private float lastCategoryLineTargetX = -1337.0f;
 
     private static class ColorPickerState {
@@ -135,8 +207,9 @@ public class ClickGuiScreen extends GuiScreen {
             currentWidth = WIDTH;
             currentHeight = HEIGHT;
         }
-        
         selectedCategory = persistentSelectedCategory;
+        valueScroll = persistentValueScroll;
+        moduleScroll = persistentModuleScroll;
         if (persistentSelectedModuleName != null) {
             for (Module mod : Main.moduleManager.getModules()) {
                 if (mod.getName().equals(persistentSelectedModuleName)) {
@@ -175,11 +248,9 @@ public class ClickGuiScreen extends GuiScreen {
             waitingForKey = false;
             return;
         }
-
         for (GuiTextField tf : textFieldMap.values()) {
             tf.textboxKeyTyped(typedChar, keyCode);
         }
-
         if (keyCode == Keyboard.KEY_ESCAPE) {
             mc.displayGuiScreen(null);
         }
@@ -192,7 +263,8 @@ public class ClickGuiScreen extends GuiScreen {
         persistentIsMaximized = isMaximized;
         persistentSelectedCategory = selectedCategory;
         persistentSelectedModuleName = (selectedModule != null) ? selectedModule.getName() : null;
-
+        persistentValueScroll = valueScroll;
+        persistentModuleScroll = moduleScroll;
         super.onGuiClosed();
         dev.astra.module.impl.render.ClickGui clickGui = dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.ClickGui.class);
         if (clickGui != null && clickGui.isToggle()) {
@@ -206,7 +278,6 @@ public class ClickGuiScreen extends GuiScreen {
         long currentTime = System.currentTimeMillis();
         float deltaTime = Math.max(0.0f, Math.min(MAX_DELTA_TIME, (currentTime - lastAnimationTime) / 1000.0f));
         lastAnimationTime = currentTime;
-
         float targetGuiAnimation = 1.0f;
         guiOpenAnimation = Math.max(0.0f, Math.min(1.0f, (float) animate(targetGuiAnimation, guiOpenAnimation, deltaTime * ANIMATION_SPEED_GUI)));
     }
@@ -230,22 +301,17 @@ public class ClickGuiScreen extends GuiScreen {
                 state.draggingAlpha = false;
             }
         }
-
         if (event == GuiEvent.CLICK && handleWin11Buttons(mouseX, mouseY, mouseButton)) {
             return;
         }
-
         handleDragging(mouseX, mouseY, mouseButton, event);
-
         if (event == GuiEvent.DRAW) {
             renderMainBackground();
             renderHeader(mouseX, mouseY);
         }
-
         renderCategories(mouseX, mouseY, mouseButton, event);
         renderModuleList(mouseX, mouseY, mouseButton, event);
         renderValueSettings(mouseX, mouseY, mouseButton, event);
-
         if (event == GuiEvent.DRAW) {
             updateColorPickerDrag(mouseX, mouseY);
         }
@@ -253,11 +319,9 @@ public class ClickGuiScreen extends GuiScreen {
 
     private boolean handleWin11Buttons(int mouseX, int mouseY, int mouseButton) {
         if (mouseButton != 0) return false;
-
         float closeX = posX + currentWidth - WIN11_BUTTON_WIDTH;
         float maxX = posX + currentWidth - WIN11_BUTTON_WIDTH * 2;
         float minX = posX + currentWidth - WIN11_BUTTON_WIDTH * 3;
-
         if (isHovered(mouseX, mouseY, closeX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT)) {
             mc.displayGuiScreen(null);
             return true;
@@ -302,7 +366,6 @@ public class ClickGuiScreen extends GuiScreen {
                 draggingY = mouseY - posY;
             }
         }
-
         if (event == GuiEvent.DRAW && dragging) {
             if (Mouse.isButtonDown(0)) {
                 posX = mouseX - draggingX;
@@ -314,16 +377,21 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private void renderMainBackground() {
-        drawRect(posX, posY, currentWidth, currentHeight, COLOR_BACKGROUND.getRGB());
+        float radius = isMaximized ? 0.0f : CORNER_RADIUS;
+        RenderUtil.drawRoundedRect(posX, posY, posX + currentWidth, posY + currentHeight, radius, COLOR_BACKGROUND.getRGB());
     }
 
     private void renderHeader(int mouseX, int mouseY) {
-        drawRect(posX, posY, currentWidth, HEADER_HEIGHT, COLOR_HEADER.getRGB());
-        mc.fontRendererObj.drawStringWithShadow("CLICKGUI", posX + 5.0f, posY + 6.0f, COLOR_TEXT_PRIMARY.getRGB());
-
+        RenderUtil.drawRoundedRect(posX, posY, posX + currentWidth, posY + HEADER_HEIGHT,
+                isMaximized ? 0.0f : CORNER_RADIUS, COLOR_HEADER.getRGB(), true, true, false, false);
+        CustomFont espFont = Fonts.esp();
+        if (espFont != null) {
+            espFont.drawStringWithShadow("CLICKGUI", posX + 5.0f, posY + 4.0f, getGlobalColor().getRGB());
+        } else {
+            mc.fontRendererObj.drawStringWithShadow("CLICKGUI", posX + 5.0f, posY + 6.0f, COLOR_TEXT_PRIMARY.getRGB());
+        }
         drawRect(posX + CATEGORY_OFFSET_X, posY + 0.5f, 2.0f, currentHeight, COLOR_SEPARATOR.getRGB());
         drawRect(posX + CATEGORY_OFFSET_X, posY + 40.0f, currentWidth - CATEGORY_OFFSET_X + 0.5f, 2.0f, COLOR_SEPARATOR.getRGB());
-
         renderWin11Buttons(mouseX, mouseY);
     }
 
@@ -331,37 +399,33 @@ public class ClickGuiScreen extends GuiScreen {
         float closeX = posX + currentWidth - WIN11_BUTTON_WIDTH;
         float maxX = posX + currentWidth - WIN11_BUTTON_WIDTH * 2;
         float minX = posX + currentWidth - WIN11_BUTTON_WIDTH * 3;
-
         boolean closeHover = isHovered(mouseX, mouseY, closeX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT);
         boolean maxHover = isHovered(mouseX, mouseY, maxX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT);
         boolean minHover = isHovered(mouseX, mouseY, minX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT);
-
         if (minHover) drawRect(minX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT, COLOR_WIN11_BTN_HOVER.getRGB());
         if (maxHover) drawRect(maxX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT, COLOR_WIN11_BTN_HOVER.getRGB());
-        if (closeHover) drawRect(closeX, posY, WIN11_BUTTON_WIDTH, HEADER_HEIGHT, COLOR_WIN11_CLOSE_HOVER.getRGB());
-
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        if (closeHover)
+            RenderUtil.drawRoundedRect(closeX, posY, closeX + WIN11_BUTTON_WIDTH, posY + HEADER_HEIGHT,
+                    isMaximized ? 0.0f : CORNER_RADIUS, COLOR_WIN11_CLOSE_HOVER.getRGB(), false, true, false, false);
+        GlStateManager.enableBlend();
+        GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
+        GlStateManager.disableTexture2D();
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
         GL11.glLineWidth(1.2f);
-
         float minCenterX = minX + WIN11_BUTTON_WIDTH / 2.0f;
         float maxCenterX = maxX + WIN11_BUTTON_WIDTH / 2.0f;
         float closeCenterX = closeX + WIN11_BUTTON_WIDTH / 2.0f;
         float centerY = posY + HEADER_HEIGHT / 2.0f;
-
         float iconR = 0.8f, iconG = 0.8f, iconB = 0.8f;
         if (minHover) { iconR = 1.0f; iconG = 1.0f; iconB = 1.0f; }
-        GL11.glColor4f(iconR, iconG, iconB, 1.0f);
+        GlStateManager.color(iconR, iconG, iconB, 1.0f);
         GL11.glBegin(GL11.GL_LINES);
         GL11.glVertex2f(minCenterX - 5.0f, posY + HEADER_HEIGHT - 5.0f);
         GL11.glVertex2f(minCenterX + 5.0f, posY + HEADER_HEIGHT - 5.0f);
         GL11.glEnd();
-
         if (maxHover) { iconR = 1.0f; iconG = 1.0f; iconB = 1.0f; } else { iconR = 0.8f; iconG = 0.8f; iconB = 0.8f; }
-        GL11.glColor4f(iconR, iconG, iconB, 1.0f);
+        GlStateManager.color(iconR, iconG, iconB, 1.0f);
         if (!isMaximized) {
             float s = 4.5f;
             GL11.glBegin(GL11.GL_LINE_LOOP);
@@ -385,9 +449,8 @@ public class ClickGuiScreen extends GuiScreen {
             GL11.glVertex2f(maxCenterX - s, centerY + s + d);
             GL11.glEnd();
         }
-
         if (closeHover) { iconR = 1.0f; iconG = 1.0f; iconB = 1.0f; } else { iconR = 0.8f; iconG = 0.8f; iconB = 0.8f; }
-        GL11.glColor4f(iconR, iconG, iconB, 1.0f);
+        GlStateManager.color(iconR, iconG, iconB, 1.0f);
         float cs = 4.0f;
         GL11.glBegin(GL11.GL_LINES);
         GL11.glVertex2f(closeCenterX - cs, centerY - cs);
@@ -397,42 +460,33 @@ public class ClickGuiScreen extends GuiScreen {
         GL11.glVertex2f(closeCenterX + cs, centerY - cs);
         GL11.glVertex2f(closeCenterX - cs, centerY + cs);
         GL11.glEnd();
-
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
-        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     private void renderCategories(int mouseX, int mouseY, int mouseButton, GuiEvent event) {
         float categoryX = posX + CATEGORY_OFFSET_X + 15.0f;
         float targetLineX = -1337.0f;
-
         for (Category category : Category.values()) {
             String displayName = category.name().charAt(0) + category.name().substring(1).toLowerCase();
             float categoryWidth = mc.fontRendererObj.getStringWidth(displayName);
             float categoryHeight = mc.fontRendererObj.FONT_HEIGHT;
-
             if (event == GuiEvent.DRAW) {
                 boolean isSelected = category == this.selectedCategory;
                 boolean isHovered = isHovered(mouseX, mouseY, categoryX, posY + 20.0f, categoryWidth, categoryHeight);
-
                 int textColor = isSelected ? getGlobalColor().getRGB() : (isHovered ? COLOR_TEXT_HOVER.getRGB() : COLOR_TEXT_SECONDARY.getRGB());
                 mc.fontRendererObj.drawStringWithShadow(displayName, categoryX, posY + 25.0f, textColor);
-
                 if (isSelected) targetLineX = categoryX;
             } else if (event == GuiEvent.CLICK) {
                 if (isHovered(mouseX, mouseY, categoryX, posY + 20.0f, categoryWidth, categoryHeight)) {
                     selectedCategory = selectedCategory == category ? null : category;
-                    selectedModule = null;
                     moduleScroll = 0.0f;
-                    valueScroll = 0.0f;
-                    colorPickerStates.clear();
                 }
             }
             categoryX += categoryWidth + 15.0f;
         }
-
         if (event == GuiEvent.DRAW && selectedCategory != null && targetLineX != -1337.0f) {
             categoryLineAnimation = (float) animate(targetLineX, categoryLineAnimation, 0.2);
             float lineWidth = mc.fontRendererObj.getStringWidth(selectedCategory.name().charAt(0) + selectedCategory.name().substring(1).toLowerCase()) - 0.5f;
@@ -445,17 +499,13 @@ public class ClickGuiScreen extends GuiScreen {
         if (event == GuiEvent.DRAW) {
             scissorStart(posX, posY + 16.5f, MODULE_LIST_WIDTH, currentHeight - 16.5f);
         }
-
         if (isHovered(mouseX, mouseY, posX, posY + 16.5f, MODULE_LIST_WIDTH, currentHeight - 16.5f) && event == GuiEvent.DRAW) {
             moduleScroll = Math.min(0.0f, moduleScroll + Mouse.getDWheel() * SCROLL_SPEED);
         }
-
         float moduleY = posY + 25.0f + moduleScroll;
         List<Module> modules = getCurrentModuleList();
-
         for (Module module : modules) {
             float moduleHeight = mc.fontRendererObj.FONT_HEIGHT;
-
             if (event == GuiEvent.DRAW) {
                 float drawX = posX + 8.0f;
                 if (module == selectedModule) {
@@ -483,7 +533,6 @@ public class ClickGuiScreen extends GuiScreen {
             }
             moduleY += moduleHeight + 4.0f;
         }
-
         if (event == GuiEvent.DRAW) {
             scissorEnd();
         }
@@ -491,36 +540,34 @@ public class ClickGuiScreen extends GuiScreen {
 
     private void renderValueSettings(int mouseX, int mouseY, int mouseButton, GuiEvent event) {
         if (selectedModule == null) return;
-
+        CustomFont espFont = Fonts.esp();
+        float nameRowHeight = espFont != null ? espFont.getHeight() : mc.fontRendererObj.FONT_HEIGHT;
         float initialValueY = posY + 40.0f;
         float currentY = initialValueY + 8.0f;
-
         if (event == GuiEvent.DRAW) {
-            mc.fontRendererObj.drawStringWithShadow(selectedModule.getName() + ":", posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
+            if (espFont != null) {
+                espFont.drawStringWithShadow(selectedModule.getName() + ":", posX + VALUE_AREA_OFFSET_X, currentY, getGlobalColor().getRGB());
+            } else {
+                mc.fontRendererObj.drawStringWithShadow(selectedModule.getName() + ":", posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
+            }
         }
-
-        currentY += mc.fontRendererObj.FONT_HEIGHT + 3.0f;
+        currentY += nameRowHeight + 3.0f;
         renderKeyAndHideSettings(mouseX, mouseY, mouseButton, event, currentY);
-
-        float headerHeight = (initialValueY + 8.0f) - (posY + 40.0f) + mc.fontRendererObj.FONT_HEIGHT + 3.0f + mc.fontRendererObj.FONT_HEIGHT + 10.0f;
-
+        float headerHeight = (initialValueY + 8.0f) - (posY + 40.0f) + nameRowHeight + 3.0f + mc.fontRendererObj.FONT_HEIGHT + 10.0f;
         if (isHovered(mouseX, mouseY, posX + CATEGORY_OFFSET_X + 1.5f, initialValueY + 1.5f + 1.0f, currentWidth - (CATEGORY_OFFSET_X + 1.5f), currentHeight - (40.0f + 1.5f)) && event == GuiEvent.DRAW) {
             float scrollDelta = Mouse.getDWheel() * SCROLL_SPEED;
             if (scrollDelta != 0) {
                 valueScroll = Math.min(0.0f, valueScroll + scrollDelta);
             }
         }
-
         if (event == GuiEvent.DRAW) {
             scissorStart(posX + CATEGORY_OFFSET_X + 1.5f + 0.5f, posY + 30.0f + headerHeight + 1.5f + 1.0f, currentWidth - (CATEGORY_OFFSET_X + 1.5f), currentHeight - (31.0f + headerHeight + 1.5f));
         }
-
         currentY = initialValueY - 4.0f + headerHeight + valueScroll;
-
         for (Value<?> value : selectedModule.getValues()) {
+            if (!value.isVisible()) continue;
             currentY = renderProperty(mouseX, mouseY, mouseButton, event, currentY, value);
         }
-
         if (event == GuiEvent.DRAW) {
             scissorEnd();
         }
@@ -528,14 +575,12 @@ public class ClickGuiScreen extends GuiScreen {
 
     private void renderKeyAndHideSettings(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY) {
         float startX = posX + VALUE_AREA_OFFSET_X;
-
         String keyPrefix = "Key: ";
         String keyValue = waitingForKey ? "..." : (selectedModule.getKeycode() == 0 ? "None" : Keyboard.getKeyName(selectedModule.getKeycode()));
         float keyPrefixWidth = mc.fontRendererObj.getStringWidth(keyPrefix);
         float keyValueWidth = mc.fontRendererObj.getStringWidth(keyValue);
         float keyFullWidth = keyPrefixWidth + keyValueWidth;
         boolean isKeyHovered = isHovered(mouseX, mouseY, startX, currentY + 1.0f, keyFullWidth, mc.fontRendererObj.FONT_HEIGHT);
-
         if (event == GuiEvent.DRAW) {
             mc.fontRendererObj.drawStringWithShadow(keyPrefix, startX, currentY + 1.0f, COLOR_TEXT_PRIMARY.getRGB());
             int keyValueColor = waitingForKey ? getGlobalColor().getRGB() : new Color(150, 150, 150).getRGB();
@@ -545,7 +590,6 @@ public class ClickGuiScreen extends GuiScreen {
                 waitingForKey = !waitingForKey;
             }
         }
-
         float hideX = startX + keyFullWidth + 25.0f;
         String hidePrefix = "Hide: ";
         String hideValue = selectedModule.isHidden() ? "true" : "false";
@@ -553,7 +597,6 @@ public class ClickGuiScreen extends GuiScreen {
         float hideValueWidth = mc.fontRendererObj.getStringWidth(hideValue);
         float hideFullWidth = hidePrefixWidth + hideValueWidth;
         boolean isHideHovered = isHovered(mouseX, mouseY, hideX, currentY + 1.0f, hideFullWidth, mc.fontRendererObj.FONT_HEIGHT);
-
         if (event == GuiEvent.DRAW) {
             mc.fontRendererObj.drawStringWithShadow(hidePrefix, hideX, currentY + 1.0f, COLOR_TEXT_PRIMARY.getRGB());
             int hideValueColor = selectedModule.isHidden() ? COLOR_ENABLED.getRGB() : COLOR_DISABLED.getRGB();
@@ -566,7 +609,9 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private float renderProperty(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, Value<?> property) {
-        if (property instanceof BooleanValue) {
+        if (property instanceof GroupValue) {
+            return renderGroupValue(mouseX, mouseY, mouseButton, event, currentY, (GroupValue) property);
+        } else if (property instanceof BooleanValue) {
             return renderBoolValue(mouseX, mouseY, mouseButton, event, currentY, (BooleanValue) property);
         } else if (property instanceof RangeSelectionNumberValue) {
             return renderRangeValue(mouseX, mouseY, mouseButton, event, currentY, (RangeSelectionNumberValue) property);
@@ -584,51 +629,80 @@ public class ClickGuiScreen extends GuiScreen {
         return currentY;
     }
 
+    private float valueBaseX() {
+        return posX + VALUE_AREA_OFFSET_X + currentValueIndent;
+    }
+
+    private float renderGroupValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, GroupValue groupValue) {
+        float startX = valueBaseX();
+        float nameWidth = mc.fontRendererObj.getStringWidth(groupValue.getName());
+        float arrowSize = 2.5f;
+        float hitboxWidth = Math.max(nameWidth + 4.0f + arrowSize * 2.0f + 4.0f, posX + currentWidth - 10.0f - startX + 2.0f);
+        boolean isHovered = isHovered(mouseX, mouseY, startX - 2.0f, currentY, hitboxWidth, mc.fontRendererObj.FONT_HEIGHT);
+        if (event == GuiEvent.DRAW) {
+            int textColor = isHovered ? COLOR_TEXT_HOVER.getRGB() : COLOR_TEXT_PRIMARY.getRGB();
+            mc.fontRendererObj.drawStringWithShadow(groupValue.getName(), startX, currentY, textColor);
+            drawTriangle(startX + nameWidth + 4.0f, currentY + mc.fontRendererObj.FONT_HEIGHT / 2.0f,
+                    arrowSize, !groupValue.isExpanded(), COLOR_GROUP_ARROW.getRGB());
+        } else if (event == GuiEvent.CLICK) {
+            if (isHovered && (mouseButton == 0 || mouseButton == 1)) {
+                groupValue.toggleExpanded();
+            }
+        }
+        float nextY = currentY + mc.fontRendererObj.FONT_HEIGHT + 4.0f;
+        if (groupValue.isExpanded()) {
+            float indentBefore = currentValueIndent;
+            currentValueIndent += 10.0f;
+            for (Value<?> child : groupValue.getChildren()) {
+                if (!child.isVisible()) continue;
+                nextY = renderProperty(mouseX, mouseY, mouseButton, event, nextY, child);
+            }
+            currentValueIndent = indentBefore;
+        }
+        return nextY;
+    }
+
+    private void drawTriangle(float x, float y, float size, boolean up, int rgb) {
+        RenderUtil.drawTriangle(x, y, size, up, rgb);
+    }
+
     private float renderBoolValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, BooleanValue boolValue) {
         String valueText = boolValue.getValue() ? "true" : "false";
         float fullWidth = mc.fontRendererObj.getStringWidth(boolValue.getName() + ": " + valueText);
-
         if (event == GuiEvent.DRAW) {
-            mc.fontRendererObj.drawStringWithShadow(boolValue.getName() + ": ", posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
+            mc.fontRendererObj.drawStringWithShadow(boolValue.getName() + ": ", valueBaseX(), currentY, COLOR_TEXT_PRIMARY.getRGB());
             int valueColor = boolValue.getValue() ? COLOR_ENABLED.getRGB() : COLOR_DISABLED.getRGB();
-            mc.fontRendererObj.drawStringWithShadow(valueText, posX + VALUE_AREA_OFFSET_X + mc.fontRendererObj.getStringWidth(boolValue.getName() + ": "), currentY, valueColor);
+            mc.fontRendererObj.drawStringWithShadow(valueText, valueBaseX() + mc.fontRendererObj.getStringWidth(boolValue.getName() + ": "), currentY, valueColor);
         } else if (event == GuiEvent.CLICK) {
-            if (isHovered(mouseX, mouseY, posX + VALUE_AREA_OFFSET_X, currentY, fullWidth, mc.fontRendererObj.FONT_HEIGHT)) {
+            if (isHovered(mouseX, mouseY, valueBaseX(), currentY, fullWidth, mc.fontRendererObj.FONT_HEIGHT)) {
                 boolValue.setValue(!boolValue.getValue());
+                selectedModule.refreshVisibility();
             }
         }
         return currentY + mc.fontRendererObj.FONT_HEIGHT + 4.0f;
     }
 
     private float renderMultiBoolValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, MultiBooleanValue multiBoolValue) {
-        float startX = posX + VALUE_AREA_OFFSET_X;
+        float startX = valueBaseX();
         float tempY = currentY;
         float currentX = startX;
-
         String nameText = multiBoolValue.getName() + ": ";
         float nameWidth = mc.fontRendererObj.getStringWidth(nameText);
-
         if (event == GuiEvent.DRAW) {
             mc.fontRendererObj.drawStringWithShadow(nameText, currentX, tempY, COLOR_TEXT_PRIMARY.getRGB());
         }
-
         currentX += nameWidth;
         float rightBoundary = posX + currentWidth - 10.0f;
         float spacing = 10.0f;
-
         for (Map.Entry<String, Boolean> entry : multiBoolValue.getValue().entrySet()) {
             String name = entry.getKey();
             boolean enabled = entry.getValue();
-
             float modeWidth = mc.fontRendererObj.getStringWidth(name);
-
             if (currentX + modeWidth > rightBoundary && currentX > startX) {
                 currentX = startX;
                 tempY += mc.fontRendererObj.FONT_HEIGHT + 4.0f;
             }
-
             boolean isHovered = isHovered(mouseX, mouseY, currentX - 2.0f, tempY, modeWidth + 4.0f, mc.fontRendererObj.FONT_HEIGHT);
-
             if (event == GuiEvent.DRAW) {
                 int color = enabled ? getGlobalColor().getRGB() : (isHovered ? COLOR_TEXT_HOVER.getRGB() : COLOR_TEXT_SECONDARY.getRGB());
                 mc.fontRendererObj.drawStringWithShadow(name, currentX, tempY, color);
@@ -645,38 +719,29 @@ public class ClickGuiScreen extends GuiScreen {
     private float renderRangeValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, RangeSelectionNumberValue rangeValue) {
         String nameText = rangeValue.getName() + ": ";
         float nameWidth = mc.fontRendererObj.getStringWidth(nameText);
-        float sliderX = posX + VALUE_AREA_OFFSET_X + nameWidth;
+        float sliderX = valueBaseX() + nameWidth;
         float sliderY = currentY + (mc.fontRendererObj.FONT_HEIGHT - SLIDER_HEIGHT) / 2.0f;
-
         double min = rangeValue.getMin();
         double max = rangeValue.getMax();
         double increment = rangeValue.getIncrement();
         double currentMin = rangeValue.getMinValue();
         double currentMax = rangeValue.getMaxValue();
-
         if (event == GuiEvent.DRAW) {
-            mc.fontRendererObj.drawStringWithShadow(nameText, posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
-
+            mc.fontRendererObj.drawStringWithShadow(nameText, valueBaseX(), currentY, COLOR_TEXT_PRIMARY.getRGB());
             double range = max - min;
             double minPercent = range == 0 ? 0 : (currentMin - min) / range;
             double maxPercent = range == 0 ? 0 : (currentMax - min) / range;
-
             drawRect(sliderX, sliderY, SLIDER_WIDTH, SLIDER_HEIGHT, COLOR_SLIDER_BG.getRGB());
-            
             float minX = sliderX + (float) (minPercent * SLIDER_WIDTH);
             float maxX = sliderX + (float) (maxPercent * SLIDER_WIDTH);
             float fillWidth = maxX - minX;
             if (fillWidth < 2.0f) fillWidth = 2.0f;
-            
             drawRect(minX, sliderY, fillWidth, SLIDER_HEIGHT, getGlobalColor().getRGB());
-
             String valueStr = String.format("%.1f - %.1f", currentMin, currentMax);
             float valueStrWidth = mc.fontRendererObj.getStringWidth(valueStr);
             float textX = sliderX + SLIDER_WIDTH / 2.0f - valueStrWidth / 2.0f;
             float textY = sliderY + SLIDER_HEIGHT / 2.0f - mc.fontRendererObj.FONT_HEIGHT / 2.0f;
-
             mc.fontRendererObj.drawStringWithShadow(valueStr, textX, textY, COLOR_TEXT_PRIMARY.getRGB());
-
             if (currentDraggingRange == rangeValue) {
                 if (!rangeDragDirectionDecided && currentMin == currentMax) {
                     if (mouseX > lastDragMouseX + 1) {
@@ -690,7 +755,6 @@ public class ClickGuiScreen extends GuiScreen {
                     }
                 }
                 lastDragMouseX = mouseX;
-
                 if (draggingRangeMin) {
                     updateRangeValue(mouseX, sliderX, SLIDER_WIDTH, min, max, increment, rangeValue, true);
                 } else if (draggingRangeMax) {
@@ -704,7 +768,6 @@ public class ClickGuiScreen extends GuiScreen {
                 double maxPercent = range == 0 ? 0 : (currentMax - min) / range;
                 float minHandleX = sliderX + (float) (minPercent * SLIDER_WIDTH);
                 float maxHandleX = sliderX + (float) (maxPercent * SLIDER_WIDTH);
-
                 if (currentMin == currentMax) {
                     draggingRangeMin = false;
                     draggingRangeMax = false;
@@ -717,11 +780,9 @@ public class ClickGuiScreen extends GuiScreen {
                     draggingRangeMax = !draggingRangeMin;
                     rangeDragDirectionDecided = true;
                 }
-                
                 currentDraggingRange = rangeValue;
             }
         }
-
         return currentY + Math.max(mc.fontRendererObj.FONT_HEIGHT, SLIDER_HEIGHT) + 4.0f;
     }
 
@@ -730,7 +791,6 @@ public class ClickGuiScreen extends GuiScreen {
         percent = Math.max(0.0, Math.min(1.0, percent));
         double val = min + percent * (max - min);
         if (increment > 0) val = Math.round(val / increment) * increment;
-
         if (isMin) {
             if (val > rangeValue.getMaxValue()) val = rangeValue.getMaxValue();
             rangeValue.setValues(val, rangeValue.getMaxValue());
@@ -741,28 +801,24 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private float renderTextValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, TextValue textValue) {
-        float textFieldX = posX + VALUE_AREA_OFFSET_X + mc.fontRendererObj.getStringWidth(textValue.getName() + ": ");
+        float textFieldX = valueBaseX() + mc.fontRendererObj.getStringWidth(textValue.getName() + ": ");
         float textFieldY = currentY - 2.5f;
         float textFieldHeight = mc.fontRendererObj.FONT_HEIGHT + 2.0f;
         int tfWidth = (int) (TEXT_FIELD_WIDTH - 8.0f);
         int tfHeight = (int) textFieldHeight;
-
         GuiTextField textField = textFieldMap.computeIfAbsent(textValue, k -> {
             GuiTextField tf = new GuiTextField(0, mc.fontRendererObj, (int) textFieldX, (int) textFieldY, tfWidth, tfHeight);
             tf.setText(textValue.getValue());
             tf.setEnableBackgroundDrawing(false);
             return tf;
         });
-
         if (event == GuiEvent.DRAW) {
-            mc.fontRendererObj.drawStringWithShadow(textValue.getName() + ": ", posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
+            mc.fontRendererObj.drawStringWithShadow(textValue.getName() + ": ", valueBaseX(), currentY, COLOR_TEXT_PRIMARY.getRGB());
             drawRect(textFieldX - 1.0f, textFieldY, TEXT_FIELD_WIDTH + 2.0f, textFieldHeight, COLOR_TEXT_FIELD_BG.getRGB());
             drawRect(textFieldX, textFieldY + 1.0f, TEXT_FIELD_WIDTH, textFieldHeight - 2.0f, COLOR_TEXT_FIELD_FG.getRGB());
-
             textField.xPosition = (int) (textFieldX + 4.0f);
             textField.yPosition = (int) (textFieldY + (textFieldHeight - mc.fontRendererObj.FONT_HEIGHT) / 2.0f + 1.0f);
             textField.updateCursorCounter();
-
             String displayText = textField.getText();
             if (displayText.isEmpty() && !textField.isFocused()) {
                 mc.fontRendererObj.drawStringWithShadow("Enter text...", textFieldX + 4.0f, textFieldY + (textFieldHeight - mc.fontRendererObj.FONT_HEIGHT) / 2.0f + 1.0f, COLOR_TEXT_PLACEHOLDER.getRGB());
@@ -781,36 +837,27 @@ public class ClickGuiScreen extends GuiScreen {
     private float renderNumValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, NumberValue numValue) {
         String nameText = numValue.getName() + ": ";
         float nameWidth = mc.fontRendererObj.getStringWidth(nameText);
-        float sliderX = posX + VALUE_AREA_OFFSET_X + nameWidth;
+        float sliderX = valueBaseX() + nameWidth;
         float sliderY = currentY + (mc.fontRendererObj.FONT_HEIGHT - SLIDER_HEIGHT) / 2.0f;
-
         double min = numValue.getMin(), max = numValue.getMax(), increment = numValue.getIncrement(), currentVal = numValue.getValue();
-
         if (event == GuiEvent.DRAW) {
-            mc.fontRendererObj.drawStringWithShadow(nameText, posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
-
+            mc.fontRendererObj.drawStringWithShadow(nameText, valueBaseX(), currentY, COLOR_TEXT_PRIMARY.getRGB());
             double range = max - min;
             double targetLength = range == 0 ? 0 : Math.max(0.0, Math.min(SLIDER_WIDTH, (currentVal - min) / range * SLIDER_WIDTH));
             double currentLength = numberSettingMap.getOrDefault(numValue, (float) targetLength);
-
             if (draggingSlider && currentDraggingSlider == numValue) {
                 currentLength = targetLength;
             } else {
                 currentLength = animate(targetLength, currentLength, 0.2);
             }
-
             numberSettingMap.put(numValue, (float) currentLength);
-
             drawRect(sliderX, sliderY, SLIDER_WIDTH, SLIDER_HEIGHT, COLOR_SLIDER_BG.getRGB());
             drawRect(sliderX, sliderY, (float) currentLength, SLIDER_HEIGHT, getGlobalColor().getRGB());
-
             String valueStr = String.valueOf(Math.round(currentVal * 100.0) / 100.0);
             float valueStrWidth = mc.fontRendererObj.getStringWidth(valueStr);
             float textX = sliderX + SLIDER_WIDTH / 2.0f - valueStrWidth / 2.0f;
             float textY = sliderY + SLIDER_HEIGHT / 2.0f - mc.fontRendererObj.FONT_HEIGHT / 2.0f;
-
             mc.fontRendererObj.drawStringWithShadow(valueStr, textX, textY, COLOR_TEXT_PRIMARY.getRGB());
-
             if (draggingSlider && currentDraggingSlider == numValue && Mouse.isButtonDown(0)) {
                 updateSliderValue(mouseX, sliderX, SLIDER_WIDTH, min, max, increment, numValue);
             }
@@ -825,32 +872,25 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private float renderModeValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, ModeValue modeValue) {
-        float startX = posX + VALUE_AREA_OFFSET_X;
+        float startX = valueBaseX();
         float tempY = currentY;
         float currentX = startX;
-
         String nameText = modeValue.getName() + ": ";
         float nameWidth = mc.fontRendererObj.getStringWidth(nameText);
-
         if (event == GuiEvent.DRAW) {
             mc.fontRendererObj.drawStringWithShadow(nameText, currentX, tempY, COLOR_TEXT_PRIMARY.getRGB());
         }
-
         currentX += nameWidth;
         float rightBoundary = posX + currentWidth - 10.0f;
         float spacing = 10.0f;
-
         for (String mode : modeValue.getModes()) {
             float modeWidth = mc.fontRendererObj.getStringWidth(mode);
-
             if (currentX + modeWidth > rightBoundary && currentX > startX) {
                 currentX = startX;
                 tempY += mc.fontRendererObj.FONT_HEIGHT + 4.0f;
             }
-
             boolean isSelected = modeValue.getValue().equals(mode);
             boolean isHovered = isHovered(mouseX, mouseY, currentX - 2.0f, tempY, modeWidth + 4.0f, mc.fontRendererObj.FONT_HEIGHT);
-
             if (event == GuiEvent.DRAW) {
                 int color = isSelected ? getGlobalColor().getRGB() : (isHovered ? COLOR_TEXT_HOVER.getRGB() : COLOR_TEXT_SECONDARY.getRGB());
                 mc.fontRendererObj.drawStringWithShadow(mode, currentX, tempY, color);
@@ -865,36 +905,24 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private float renderColorValue(int mouseX, int mouseY, int mouseButton, GuiEvent event, float currentY, ColorValue colorValue) {
-        float pickerX = posX + VALUE_AREA_OFFSET_X;
+        float pickerX = valueBaseX();
         ColorPickerState state = getColorState(colorValue);
-
         state.pickerX = pickerX;
         state.pickerY = currentY + mc.fontRendererObj.FONT_HEIGHT;
         state.hueSliderY = state.pickerY + COLOR_PICKER_HEIGHT + 5.0f;
         state.alphaSliderY = state.hueSliderY + HUE_SLIDER_HEIGHT + 5.0f;
-
         if (event == GuiEvent.DRAW) {
-            mc.fontRendererObj.drawStringWithShadow(colorValue.getName() + ": ", posX + VALUE_AREA_OFFSET_X, currentY, COLOR_TEXT_PRIMARY.getRGB());
-
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            GL11.glDisable(GL11.GL_TEXTURE_2D);
-
+            mc.fontRendererObj.drawStringWithShadow(colorValue.getName() + ": ", valueBaseX(), currentY, COLOR_TEXT_PRIMARY.getRGB());
             Color hueColor = Color.getHSBColor(state.hue, 1.0f, 1.0f);
             drawRect(state.pickerX, state.pickerY, COLOR_PICKER_WIDTH, COLOR_PICKER_HEIGHT, hueColor.getRGB());
-
             renderColorPickerGradients(state);
             renderHueSlider(state);
             renderAlphaSlider(state, colorValue);
             renderColorPreview(state, colorValue);
             renderColorIndicators(state);
-
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            GL11.glDisable(GL11.GL_BLEND);
         } else if (event == GuiEvent.CLICK) {
             handleColorPickerClick(mouseX, mouseY, mouseButton, state, colorValue);
         }
-
         return currentY + mc.fontRendererObj.FONT_HEIGHT + 4.0f + COLOR_PICKER_HEIGHT + 5.0f + HUE_SLIDER_HEIGHT + 5.0f + ALPHA_SLIDER_HEIGHT + 4.0f;
     }
 
@@ -937,10 +965,13 @@ public class ClickGuiScreen extends GuiScreen {
         drawRect(state.pickerX, state.alphaSliderY, COLOR_PICKER_WIDTH, ALPHA_SLIDER_HEIGHT, COLOR_INDICATOR_WHITE.getRGB());
         int rgb = Color.HSBtoRGB(state.hue, state.saturation, state.brightness);
         Color currentColor = new Color(rgb);
+        float steps = COLOR_PICKER_WIDTH - 1.0f;
         for (float x = 0; x < COLOR_PICKER_WIDTH; x++) {
-            float alpha = x / COLOR_PICKER_WIDTH;
-            Color c = new Color(currentColor.getRed(), currentColor.getGreen(), currentColor.getBlue(), (int)(alpha * 255));
-            drawRect(state.pickerX + x, state.alphaSliderY + 1.0f, 1.0f, ALPHA_SLIDER_HEIGHT - 2.0f, c.getRGB());
+            float t = Math.min(1.0f, x / steps);
+            int r = Math.round(255.0f + (currentColor.getRed() - 255.0f) * t);
+            int g = Math.round(255.0f + (currentColor.getGreen() - 255.0f) * t);
+            int b = Math.round(255.0f + (currentColor.getBlue() - 255.0f) * t);
+            drawRect(state.pickerX + x, state.alphaSliderY + 1.0f, 1.0f, ALPHA_SLIDER_HEIGHT - 2.0f, (255 << 24) | (r << 16) | (g << 8) | b);
         }
         float alphaPos = state.pickerX + (state.alpha * COLOR_PICKER_WIDTH);
         drawRect(alphaPos - 2.0f, state.alphaSliderY - 2.0f, 4.0f, ALPHA_SLIDER_HEIGHT + 4.0f, COLOR_INDICATOR_WHITE.getRGB());
@@ -957,13 +988,12 @@ public class ClickGuiScreen extends GuiScreen {
     private void renderColorIndicators(ColorPickerState state) {
         float indicatorX = state.pickerX + state.saturation * COLOR_PICKER_WIDTH;
         float indicatorY = state.pickerY + (1.0f - state.brightness) * COLOR_PICKER_HEIGHT;
-
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.enableBlend();
+        GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
+        GlStateManager.disableTexture2D();
         GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glLineWidth(1.5f);
-        GL11.glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
         GL11.glBegin(GL11.GL_LINE_LOOP);
         float r = 3.0f;
         for (int i = 0; i <= 360; i += 30) {
@@ -972,8 +1002,9 @@ public class ClickGuiScreen extends GuiScreen {
         }
         GL11.glEnd();
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     private void handleColorPickerClick(int mouseX, int mouseY, int mouseButton, ColorPickerState state, ColorValue colorValue) {
@@ -1017,7 +1048,7 @@ public class ClickGuiScreen extends GuiScreen {
     private void updateColorFromState(ColorPickerState state, ColorValue colorValue) {
         int rgb = Color.HSBtoRGB(state.hue, state.saturation, state.brightness);
         Color c = new Color(rgb);
-        int rgba = new Color(c.getRed(), c.getGreen(), c.getBlue(), (int)(state.alpha * 255)).getRGB();
+        int rgba = new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(state.alpha * 255.0f)).getRGB();
         colorValue.setValue(rgba);
     }
 
@@ -1049,7 +1080,6 @@ public class ClickGuiScreen extends GuiScreen {
 
     private void scissorStart(float x, float y, float width, float height) {
         if (width <= 0 || height <= 0) return;
-        
         ScaledResolution sr = new ScaledResolution(mc);
         double scale = sr.getScaleFactor();
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
@@ -1062,7 +1092,8 @@ public class ClickGuiScreen extends GuiScreen {
     }
 
     private void drawRect(float x, float y, float width, float height, int color) {
-        GuiScreen.drawRect((int) x, (int) y, (int) (x + width), (int) (y + height), color);
+        if (width <= 0.0f || height <= 0.0f) return;
+        RenderUtil.drawRect(x, y, x + width, y + height, color);
     }
 
     private double animate(double target, double current, double speed) {

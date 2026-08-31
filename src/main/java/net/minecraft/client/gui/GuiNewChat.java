@@ -26,6 +26,13 @@ public class GuiNewChat extends Gui {
         this.mc = mcIn;
     }
 
+    // LiquidBounce-style "InfiniteChat": when the Chat module enables it,
+    // messages never fade out and the history is not capped
+    private boolean isInfiniteChat() {
+        dev.astra.module.impl.render.Chat chatModule = dev.astra.module.impl.render.Chat.INSTANCE;
+        return chatModule != null && chatModule.isToggle() && chatModule.infiniteChat.isEnabled();
+    }
+
     public void drawChat(int updateCounter) {
         if (this.mc.gameSettings.chatVisibility != EntityPlayer.EnumChatVisibility.HIDDEN) {
             int i = this.getLineCount();
@@ -44,6 +51,62 @@ public class GuiNewChat extends Gui {
                 GlStateManager.pushMatrix();
                 GlStateManager.translate(2.0F, 20.0F, 0.0F);
                 GlStateManager.scale(f1, f1, 1.0F);
+
+                dev.astra.module.impl.render.Chat chatModule = dev.astra.module.impl.render.Chat.INSTANCE;
+                boolean customBg = chatModule != null && chatModule.isToggle() && chatModule.rounded.isEnabled();
+
+                if (customBg) {                    boolean panelFound = false;
+                    int panelMinY = 0;
+                    int panelMaxY = 0;
+
+                    for (int pI1 = 0; pI1 + this.scrollPos < this.drawnChatLines.size() && pI1 < i; ++pI1) {
+                        ChatLine pLine = this.drawnChatLines.get(pI1 + this.scrollPos);
+
+                        if (pLine == null) {
+                            continue;
+                        }
+
+                        int pAge = updateCounter - pLine.getUpdatedCounter();
+
+                        if (pAge >= 200 && !flag) {
+                            continue;
+                        }
+
+                        double pD0 = (double) pAge / 200.0D;
+                        pD0 = 1.0D - pD0;
+                        pD0 = pD0 * 10.0D;
+                        pD0 = MathHelper.clamp_double(pD0, 0.0D, 1.0D);
+                        pD0 = pD0 * pD0;
+                        int pFade = (int) (255.0D * pD0);
+
+                        if (flag) {
+                            pFade = 255;
+                        }
+
+                        pFade = (int) ((float) pFade * f);
+
+                        if (pFade > 3) {
+                            int pJ2 = -pI1 * 9;
+
+                            if (!panelFound) {
+                                panelFound = true;
+                                panelMinY = pJ2;
+                                panelMaxY = pJ2;
+                            } else {
+                                panelMinY = Math.min(panelMinY, pJ2);
+                                panelMaxY = Math.max(panelMaxY, pJ2);
+                            }
+                        }
+                    }
+
+                    if (panelFound) {
+                        int alpha = MathHelper.clamp_int((int) Math.round(chatModule.opacity.getValue().doubleValue() / 100.0D * 255.0D), 0, 255);
+
+                        if (alpha > 0) {
+                            dev.astra.util.RenderUtil.drawRoundedRect(0.0F, (float) (panelMinY - 9), (float) (l + 4), (float) panelMaxY, chatModule.radius.getValue().floatValue(), alpha << 24);
+                        }
+                    }
+                }
 
                 for (int i1 = 0; i1 + this.scrollPos < this.drawnChatLines.size() && i1 < i; ++i1) {
                     ChatLine chatline = this.drawnChatLines.get(i1 + this.scrollPos);
@@ -69,7 +132,7 @@ public class GuiNewChat extends Gui {
                             if (l1 > 3) {
                                 int i2 = 0;
                                 int j2 = -i1 * 9;
-                                if (dev.astra.module.impl.render.Chat.INSTANCE == null || !dev.astra.module.impl.render.Chat.INSTANCE.isToggle()) {
+                                if (!customBg) {
                                     drawRect(i2, j2 - 9, i2 + l + 4, j2, l1 / 2 << 24);
                                 }
                                 String s = chatline.getChatComponent().getFormattedText();
@@ -136,15 +199,19 @@ public class GuiNewChat extends Gui {
             this.drawnChatLines.add(0, new ChatLine(updateCounter, ichatcomponent, chatLineId));
         }
 
-        while (this.drawnChatLines.size() > 100) {
-            this.drawnChatLines.remove(this.drawnChatLines.size() - 1);
+        if (!isInfiniteChat()) {
+            while (this.drawnChatLines.size() > 100) {
+                this.drawnChatLines.remove(this.drawnChatLines.size() - 1);
+            }
         }
 
         if (!displayOnly) {
             this.chatLines.add(0, new ChatLine(updateCounter, chatComponent, chatLineId));
 
-            while (this.chatLines.size() > 100) {
-                this.chatLines.remove(this.chatLines.size() - 1);
+            if (!isInfiniteChat()) {
+                while (this.chatLines.size() > 100) {
+                    this.chatLines.remove(this.chatLines.size() - 1);
+                }
             }
         }
     }

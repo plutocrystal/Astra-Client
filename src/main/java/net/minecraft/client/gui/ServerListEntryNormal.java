@@ -21,11 +21,13 @@ import java.awt.image.BufferedImage;
 import java.net.UnknownHostException;
 import java.util.List;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 
 public class ServerListEntryNormal implements GuiListExtended.IGuiListEntry {
     private static final Logger logger = LogManager.getLogger();
     private static final ThreadPoolExecutor field_148302_b = new ScheduledThreadPoolExecutor(5, (new ThreadFactoryBuilder()).setNameFormat("Server Pinger #%d").setDaemon(true).build());
+    private static final Semaphore PING_PERMITS = new Semaphore(10);
     private static final ResourceLocation UNKNOWN_SERVER = new ResourceLocation("textures/misc/unknown_server.png");
     private static final ResourceLocation SERVER_SELECTION_BUTTONS = new ResourceLocation("textures/gui/server_selection.png");
     private final GuiMultiplayer owner;
@@ -53,13 +55,21 @@ public class ServerListEntryNormal implements GuiListExtended.IGuiListEntry {
             field_148302_b.submit(new Runnable() {
                 public void run() {
                     try {
-                        ServerListEntryNormal.this.owner.getOldServerPinger().ping(ServerListEntryNormal.this.server);
-                    } catch (UnknownHostException var2) {
-                        ServerListEntryNormal.this.server.pingToServer = -1L;
-                        ServerListEntryNormal.this.server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't resolve hostname";
-                    } catch (Exception var3) {
-                        ServerListEntryNormal.this.server.pingToServer = -1L;
-                        ServerListEntryNormal.this.server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't connect to server.";
+                        PING_PERMITS.acquire();
+
+                        try {
+                            ServerListEntryNormal.this.owner.getOldServerPinger().ping(ServerListEntryNormal.this.server);
+                        } catch (UnknownHostException var2) {
+                            ServerListEntryNormal.this.server.pingToServer = -1L;
+                            ServerListEntryNormal.this.server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't resolve hostname";
+                        } catch (Exception var3) {
+                            ServerListEntryNormal.this.server.pingToServer = -1L;
+                            ServerListEntryNormal.this.server.serverMOTD = EnumChatFormatting.DARK_RED + "Can't connect to server.";
+                        } finally {
+                            PING_PERMITS.release();
+                        }
+                    } catch (InterruptedException var4) {
+                        Thread.currentThread().interrupt();
                     }
                 }
             });
@@ -126,7 +136,7 @@ public class ServerListEntryNormal implements GuiListExtended.IGuiListEntry {
         if (this.server.getBase64EncodedIconData() != null && !this.server.getBase64EncodedIconData().equals(this.field_148299_g)) {
             this.field_148299_g = this.server.getBase64EncodedIconData();
             this.prepareServerIcon();
-            this.owner.getServerList().saveServerList();
+            this.owner.getServerList().saveServerListAsync();
         }
 
         if (this.field_148305_h != null) {

@@ -2,7 +2,9 @@ package dev.astra.value;
 
 public abstract class Value<T> {
     private final String name;
+
     private T value;
+
     private boolean visible = true;
 
     public Value(String name, T value) {

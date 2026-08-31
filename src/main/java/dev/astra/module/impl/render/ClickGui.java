@@ -6,9 +6,8 @@ import dev.astra.module.Module;
 import org.lwjgl.input.Keyboard;
 
 public class ClickGui extends Module {
-
     public ClickGui() {
-        super("ClickGui", Keyboard.KEY_RSHIFT, Category.RENDER);
+        super("ClickGui", Keyboard.KEY_NONE, Category.RENDER);
     }
 
     @Override

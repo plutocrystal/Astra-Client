@@ -3,6 +3,7 @@ package net.minecraft.entity;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Maps;
+import dev.astra.util.rotation.RotationManager;
 import net.minecraft.block.Block;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.block.material.Material;
@@ -1065,7 +1066,7 @@ public abstract class EntityLivingBase extends Entity {
         }
 
         if (this.isSprinting()) {
-            float f = this.rotationYaw * 0.017453292F;
+            float f = (this instanceof EntityPlayerSP && RotationManager.isActive() && RotationManager.getMoveFix() != RotationManager.MoveFix.None ? RotationManager.getYaw() : this.rotationYaw) * 0.017453292F;
             this.motionX -= MathHelper.sin(f) * 0.2F;
             this.motionZ += MathHelper.cos(f) * 0.2F;
         }
@@ -1079,6 +1080,17 @@ public abstract class EntityLivingBase extends Entity {
 
     protected void handleJumpLava() {
         this.motionY += 0.03999999910593033D;
+    }
+
+    private void moveFlyingWithRotFix(float strafe, float forward, float friction) {
+        if (this instanceof EntityPlayerSP && RotationManager.isActive() && RotationManager.getMoveFix() != RotationManager.MoveFix.None) {
+            float realYaw = this.rotationYaw;
+            this.rotationYaw = RotationManager.getYaw();
+            this.moveFlying(strafe, forward, friction);
+            this.rotationYaw = realYaw;
+        } else {
+            this.moveFlying(strafe, forward, friction);
+        }
     }
 
     public void moveEntityWithHeading(float strafe, float forward) {
@@ -1100,7 +1112,7 @@ public abstract class EntityLivingBase extends Entity {
                         f5 = this.jumpMovementFactor;
                     }
 
-                    this.moveFlying(strafe, forward, f5);
+                    this.moveFlyingWithRotFix(strafe, forward, f5);
                     f4 = 0.91F;
 
                     if (this.onGround) {
@@ -1145,7 +1157,7 @@ public abstract class EntityLivingBase extends Entity {
                     this.motionZ *= f4;
                 } else {
                     double d1 = this.posY;
-                    this.moveFlying(strafe, forward, 0.02F);
+                    this.moveFlyingWithRotFix(strafe, forward, 0.02F);
                     this.moveEntity(this.motionX, this.motionY, this.motionZ);
                     this.motionX *= 0.5D;
                     this.motionY *= 0.5D;
@@ -1175,7 +1187,7 @@ public abstract class EntityLivingBase extends Entity {
                     f2 += (this.getAIMoveSpeed() - f2) * f3 / 3.0F;
                 }
 
-                this.moveFlying(strafe, forward, f2);
+                this.moveFlyingWithRotFix(strafe, forward, f2);
                 this.moveEntity(this.motionX, this.motionY, this.motionZ);
                 this.motionX *= f1;
                 this.motionY *= 0.800000011920929D;

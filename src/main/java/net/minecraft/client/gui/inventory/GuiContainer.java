@@ -102,6 +102,8 @@ public abstract class GuiContainer extends GuiScreen {
         }
 
         RenderHelper.disableStandardItemLighting();
+        // LiquidBounce port: render highlighted inventory slots (ChestStealer/InventoryCleaner/AutoArmor)
+        dev.astra.util.inventory.LBInventoryManager.renderHighlights(this);
         this.drawGuiContainerForegroundLayer(mouseX, mouseY);
         RenderHelper.enableGUIStandardItemLighting();
         InventoryPlayer inventoryplayer = this.mc.thePlayer.inventory;

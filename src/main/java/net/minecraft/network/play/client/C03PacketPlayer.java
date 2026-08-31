@@ -97,6 +97,18 @@ public class C03PacketPlayer implements Packet<INetHandlerPlayServer> {
             buf.writeDouble(this.z);
             super.writePacketData(buf);
         }
+
+        public double getX() {
+            return this.x;
+        }
+
+        public double getY() {
+            return this.y;
+        }
+
+        public double getZ() {
+            return this.z;
+        }
     }
 
     public static class C05PacketPlayerLook extends C03PacketPlayer {
@@ -121,6 +133,14 @@ public class C03PacketPlayer implements Packet<INetHandlerPlayServer> {
             buf.writeFloat(this.yaw);
             buf.writeFloat(this.pitch);
             super.writePacketData(buf);
+        }
+
+        public float getYaw() {
+            return this.yaw;
+        }
+
+        public float getPitch() {
+            return this.pitch;
         }
     }
 
@@ -157,6 +177,26 @@ public class C03PacketPlayer implements Packet<INetHandlerPlayServer> {
             buf.writeFloat(this.yaw);
             buf.writeFloat(this.pitch);
             super.writePacketData(buf);
+        }
+
+        public double getX() {
+            return this.x;
+        }
+
+        public double getY() {
+            return this.y;
+        }
+
+        public double getZ() {
+            return this.z;
+        }
+
+        public float getYaw() {
+            return this.yaw;
+        }
+
+        public float getPitch() {
+            return this.pitch;
         }
     }
 }

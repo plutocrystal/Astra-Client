@@ -2,6 +2,7 @@ package net.minecraft.client.gui;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import de.florianmichael.viamcp.gui.GuiProtocolSelector;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
@@ -188,6 +189,7 @@ public class GuiMainMenu extends GuiScreen implements GuiYesNoCallback {
     }
 
     private void addSingleplayerMultiplayerButtons(int p_73969_1_, int p_73969_2_) {
+        this.buttonList.add(new GuiButton(69, 5, 5, 90, 20, "Version"));
         this.buttonList.add(new GuiButton(1, this.width / 2 - 100, p_73969_1_, I18n.format("menu.singleplayer")));
         this.buttonList.add(new GuiButton(2, this.width / 2 - 100, p_73969_1_ + p_73969_2_, I18n.format("menu.multiplayer")));
 
@@ -211,6 +213,10 @@ public class GuiMainMenu extends GuiScreen implements GuiYesNoCallback {
     }
 
     protected void actionPerformed(GuiButton button) throws IOException {
+        if (button.id == 69) {
+            this.mc.displayGuiScreen(new GuiProtocolSelector(this));
+        }
+
         if (button.id == 0) {
             this.mc.displayGuiScreen(new GuiOptions(this, this.mc.gameSettings));
         }

@@ -174,6 +174,10 @@ public class RenderChunk {
                 IBlockState iblockstate = chunkcacheof.getBlockState(blockposm);
                 Block block = iblockstate.getBlock();
 
+                if (dev.astra.module.impl.render.Xray.shouldHide(block)) {
+                    continue;
+                }
+
                 if (block.isOpaqueCube()) {
                     lvt_10_1_.func_178606_a(blockposm);
                 }

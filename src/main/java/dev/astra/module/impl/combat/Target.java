@@ -6,12 +6,16 @@ import dev.astra.value.impl.BooleanValue;
 import org.lwjgl.input.Keyboard;
 
 public class Target extends Module {
-
     public static BooleanValue players = new BooleanValue("Players", true);
+
     public static BooleanValue mobs = new BooleanValue("Mobs", false);
+
     public static BooleanValue animals = new BooleanValue("Animals", false);
+
     public static BooleanValue invisible = new BooleanValue("Invisible", false);
+
     public static BooleanValue dead = new BooleanValue("Dead", false);
+
     public static BooleanValue friends = new BooleanValue("Friends", false);
 
     public Target() {

@@ -3,6 +3,18 @@ package net.minecraft.client;
 import dev.astra.Main;
 import dev.astra.module.impl.exploit.MultiActions;
 import dev.astra.module.impl.render.NoToasts;
+import com.viaversion.viaversion.api.Via;
+import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
+import com.viaversion.viaversion.api.protocol.packet.State;
+import com.viaversion.viaversion.api.protocol.version.ProtocolVersion;
+import com.viaversion.viaversion.api.type.Types;
+import com.viaversion.viaversion.protocols.v1_20to1_20_2.packet.ServerboundConfigurationPackets1_20_2;
+import com.viaversion.viaversion.protocols.v1_21to1_21_2.Protocol1_21To1_21_2;
+import com.viaversion.viaversion.protocols.v1_21to1_21_2.packet.ServerboundPackets1_21_2;
+import com.viaversion.viabackwards.protocol.v1_20_3to1_20_2.Protocol1_20_3To1_20_2;
+import de.florianmichael.vialoadingbase.ViaLoadingBase;
+import de.florianmichael.viamcp.ViaMCP;
 import de.florianmichael.viamcp.fixes.AttackOrder;
 import dev.astra.event.EventManager;
 import com.google.common.collect.*;
@@ -775,7 +787,7 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
             this.shutdown();
         }
         
-        dev.astra.event.events.EventGameLoop gameLoopEvent = new dev.astra.event.events.EventGameLoop();
+        dev.astra.event.events.misc.GameLoopEvent gameLoopEvent = new dev.astra.event.events.misc.GameLoopEvent();
         dev.astra.Main.eventBus.post(gameLoopEvent);
         this.timer.timerSpeed = gameLoopEvent.timerSpeed;
 
@@ -815,10 +827,6 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
         this.framebufferMc.bindFramebuffer(true);
         this.mcProfiler.startSection("display");
         GlStateManager.enableTexture2D();
-
-        if (this.thePlayer != null && this.thePlayer.isEntityInsideOpaqueBlock()) {
-            this.gameSettings.thirdPersonView = 0;
-        }
 
         this.mcProfiler.endSection();
 
@@ -1286,6 +1294,39 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
     }
 
     public void runTick() throws IOException {
+        if (ViaMCP.INSTANCE != null && ViaMCP.INSTANCE.user != null && ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_21_4) && ViaMCP.INSTANCE.user.getProtocolInfo().getServerState() == State.CONFIGURATION) {
+            PacketWrapper packet = PacketWrapper.create(ServerboundConfigurationPackets1_20_2.CUSTOM_PAYLOAD, ViaMCP.INSTANCE.user);
+            packet.write(Types.STRING, "minecraft:brand");
+            packet.write(Types.STRING, "vanilla");
+            try {
+                packet.sendToServer(Protocol1_20_3To1_20_2.class);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            PacketWrapper packetInfo = PacketWrapper.create(ServerboundConfigurationPackets1_20_2.CLIENT_INFORMATION, ViaMCP.INSTANCE.user);
+            packetInfo.write(Types.STRING, this.gameSettings.language.toLowerCase());
+            packetInfo.write(Types.BYTE, (byte) this.gameSettings.renderDistanceChunks);
+            packetInfo.write(Types.VAR_INT, this.gameSettings.chatVisibility.ordinal());
+            packetInfo.write(Types.BOOLEAN, this.gameSettings.chatColours);
+
+            int modelParts = 0;
+
+            for (net.minecraft.entity.player.EnumPlayerModelParts parts : this.gameSettings.getModelParts()) {
+                modelParts |= parts.getPartMask();
+            }
+
+            packetInfo.write(Types.UNSIGNED_BYTE, (short) modelParts);
+            packetInfo.write(Types.VAR_INT, 1);
+            packetInfo.write(Types.BOOLEAN, true);
+            packetInfo.write(Types.BOOLEAN, true);
+            try {
+                packetInfo.sendToServer(Protocol1_20_3To1_20_2.class);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
         if (this.rightClickDelayTimer > 0) {
             --this.rightClickDelayTimer;
         }
@@ -1407,7 +1448,7 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
 
             while (Keyboard.next()) {
                 if (Keyboard.getEventKeyState()) {
-                    Main.eventBus.post(new dev.astra.event.events.KeyEvent(Keyboard.getEventKey()));
+                    Main.eventBus.post(new dev.astra.event.events.misc.KeyEvent(Keyboard.getEventKey()));
                 }
                 int k = Keyboard.getEventKey() == 0 ? Keyboard.getEventCharacter() + 256 : Keyboard.getEventKey();
                 KeyBinding.setKeyBindState(k, Keyboard.getEventKeyState());
@@ -1684,15 +1725,19 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
         this.mcProfiler.endSection();
         this.systemTime = getSystemTime();
         
-        EventManager.call(new dev.astra.event.events.TickEvent());
+        EventManager.call(new dev.astra.event.events.misc.TickEvent());
+        
+        Main.eventBus.post(new dev.astra.event.events.misc.TickEvent());
 
-        while (org.lwjgl.input.Keyboard.next()) {
-            if (org.lwjgl.input.Keyboard.getEventKeyState()) {
-                Main.eventBus.post(new dev.astra.event.events.KeyEvent(org.lwjgl.input.Keyboard.getEventKey()));
+        if (this.thePlayer != null && this.theWorld != null && ViaLoadingBase.getInstance().getTargetVersion().newerThanOrEqualTo(ProtocolVersion.v1_21_2)) {
+            UserConnection connection = Via.getManager().getConnectionManager().getConnections().iterator().next();
+            PacketWrapper packet = PacketWrapper.create(ServerboundPackets1_21_2.CLIENT_TICK_END, null, connection);
+            try {
+                packet.sendToServer(Protocol1_21To1_21_2.class);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
-        
-        Main.eventBus.post(new dev.astra.event.events.TickEvent());
     }
 
     public void launchIntegratedServer(String folderName, String worldName, WorldSettings worldSettingsIn) {
@@ -1812,7 +1857,6 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
             this.thePlayer = null;
         }
 
-        System.gc();
         this.systemTime = 0L;
     }
 
@@ -2078,6 +2122,10 @@ public class Minecraft implements IThreadListener, IPlayerUsage {
 
     public static Minecraft getMinecraft() {
         return theMinecraft;
+    }
+
+    public Timer getTimer() {
+        return this.timer;
     }
 
     public ListenableFuture<Object> scheduleResourcesRefresh() {

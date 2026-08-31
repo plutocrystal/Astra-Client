@@ -1,5 +1,6 @@
 package net.minecraft.client.renderer;
 
+import dev.astra.module.impl.render.BlockOverlay;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -2171,7 +2172,6 @@ public class RenderGlobal implements IWorldAccess, IResourceManagerReloadListene
         if (execute == 0 && movingObjectPositionIn.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK) {
             GlStateManager.enableBlend();
             GlStateManager.tryBlendFuncSeparate(770, 771, 1, 0);
-            GlStateManager.color(0.0F, 0.0F, 0.0F, 0.4F);
             GL11.glLineWidth(2.0F);
             GlStateManager.disableTexture2D();
 
@@ -2196,7 +2196,18 @@ public class RenderGlobal implements IWorldAccess, IResourceManagerReloadListene
                     axisalignedbb = BlockModelUtils.getOffsetBoundingBox(axisalignedbb, block$enumoffsettype, blockpos);
                 }
 
-                drawSelectionBoundingBox(axisalignedbb.expand(0.0020000000949949026D, 0.0020000000949949026D, 0.0020000000949949026D).offset(-d0, -d1, -d2));
+                AxisAlignedBB box = axisalignedbb.expand(0.0020000000949949026D, 0.0020000000949949026D, 0.0020000000949949026D).offset(-d0, -d1, -d2);
+
+                String mode = BlockOverlay.getMode();
+
+                if (mode.equals("Fill")) {
+                    drawFilledBox(box, BlockOverlay.getFillRed(), BlockOverlay.getFillGreen(), BlockOverlay.getFillBlue(), BlockOverlay.getFillAlpha(), false);
+                } else if (mode.equals("Both")) {
+                    drawFilledBox(box, BlockOverlay.getFillRed(), BlockOverlay.getFillGreen(), BlockOverlay.getFillBlue(), BlockOverlay.getFillAlpha(), true);
+                    drawOutlinedBoundingBox(box, BlockOverlay.getOutlineRed(), BlockOverlay.getOutlineGreen(), BlockOverlay.getOutlineBlue(), BlockOverlay.getOutlineAlpha());
+                } else {
+                    drawOutlinedBoundingBox(box, BlockOverlay.getOutlineRed(), BlockOverlay.getOutlineGreen(), BlockOverlay.getOutlineBlue(), BlockOverlay.getOutlineAlpha());
+                }
             }
 
             GlStateManager.depthMask(true);
@@ -2266,6 +2277,57 @@ public class RenderGlobal implements IWorldAccess, IResourceManagerReloadListene
         worldrenderer.pos(boundingBox.minX, boundingBox.minY, boundingBox.maxZ).color(red, green, blue, alpha).endVertex();
         worldrenderer.pos(boundingBox.minX, boundingBox.maxY, boundingBox.maxZ).color(red, green, blue, alpha).endVertex();
         tessellator.draw();
+    }
+    
+    public static void drawFilledBox(AxisAlignedBB box, int red, int green, int blue, int alpha, boolean useDepth) {
+        Tessellator tessellator = Tessellator.getInstance();
+        WorldRenderer worldrenderer = tessellator.getWorldRenderer();
+
+        GlStateManager.disableCull();
+    
+        if (!useDepth) {
+            GlStateManager.disableDepth();
+        }
+
+        worldrenderer.begin(7, DefaultVertexFormats.POSITION_COLOR);
+
+        worldrenderer.pos(box.minX, box.minY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.minY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.minY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.minY, box.maxZ).color(red, green, blue, alpha).endVertex();
+
+        worldrenderer.pos(box.minX, box.maxY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.maxY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.maxY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.maxY, box.minZ).color(red, green, blue, alpha).endVertex();
+
+        worldrenderer.pos(box.minX, box.minY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.minY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.maxY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.maxY, box.minZ).color(red, green, blue, alpha).endVertex();
+
+        worldrenderer.pos(box.minX, box.minY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.minY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.maxY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.maxY, box.maxZ).color(red, green, blue, alpha).endVertex();
+
+        worldrenderer.pos(box.minX, box.minY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.minY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.maxY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.minX, box.maxY, box.minZ).color(red, green, blue, alpha).endVertex();
+
+        worldrenderer.pos(box.maxX, box.minY, box.minZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.minY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.maxY, box.maxZ).color(red, green, blue, alpha).endVertex();
+        worldrenderer.pos(box.maxX, box.maxY, box.minZ).color(red, green, blue, alpha).endVertex();
+
+        tessellator.draw();
+
+        if (!useDepth) {
+            GlStateManager.enableDepth();
+        }
+    
+        GlStateManager.enableCull();
     }
 
     private void markBlocksForUpdate(int x1, int y1, int z1, int x2, int y2, int z2) {

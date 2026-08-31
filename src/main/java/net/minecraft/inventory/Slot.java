@@ -52,6 +52,10 @@ public class Slot {
     }
 
     public void putStack(ItemStack stack) {
+        // LiquidBounce port: track when the stack entered the slot (item age)
+        if (stack != null && stack != this.getStack()) {
+            stack.itemDelay = System.currentTimeMillis();
+        }
         this.inventory.setInventorySlotContents(this.slotIndex, stack);
         this.onSlotChanged();
     }

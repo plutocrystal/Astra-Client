@@ -32,13 +32,21 @@ public class TileEntityItemStackRenderer {
             if (itemStackIn.hasTagCompound()) {
                 NBTTagCompound nbttagcompound = itemStackIn.getTagCompound();
 
-                if (nbttagcompound.hasKey("SkullOwner", 10)) {
-                    gameprofile = NBTUtil.readGameProfileFromNBT(nbttagcompound.getCompoundTag("SkullOwner"));
-                } else if (nbttagcompound.hasKey("SkullOwner", 8) && nbttagcompound.getString("SkullOwner").length() > 0) {
-                    gameprofile = new GameProfile(null, nbttagcompound.getString("SkullOwner"));
-                    gameprofile = TileEntitySkull.updateGameprofile(gameprofile);
-                    nbttagcompound.removeTag("SkullOwner");
-                    nbttagcompound.setTag("SkullOwner", NBTUtil.writeGameProfile(new NBTTagCompound(), gameprofile));
+                try {
+                    if (nbttagcompound.hasKey("SkullOwner", 10)) {
+                        gameprofile = NBTUtil.readGameProfileFromNBT(nbttagcompound.getCompoundTag("SkullOwner"));
+                    } else if (nbttagcompound.hasKey("SkullOwner", 8)) {
+                        String owner = nbttagcompound.getString("SkullOwner").trim();
+
+                        if (!owner.isEmpty()) {
+                            gameprofile = new GameProfile(null, owner);
+                            gameprofile = TileEntitySkull.updateGameprofile(gameprofile);
+                            nbttagcompound.removeTag("SkullOwner");
+                            nbttagcompound.setTag("SkullOwner", NBTUtil.writeGameProfile(new NBTTagCompound(), gameprofile));
+                        }
+                    }
+                } catch (Exception ignored) {
+                    gameprofile = null;
                 }
             }
 

@@ -40,6 +40,8 @@ public final class ItemStack {
     private boolean canDestroyCacheResult;
     private Block canPlaceOnCacheBlock;
     private boolean canPlaceOnCacheResult;
+    // LiquidBounce port: timestamp of when this stack entered an inventory slot (item age tracking)
+    public long itemDelay = System.currentTimeMillis();
 
     public ItemStack(Block blockIn) {
         this(blockIn, 1);

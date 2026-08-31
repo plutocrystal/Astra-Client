@@ -1,8 +1,7 @@
 package dev.astra.module;
 
 import dev.astra.event.EventHandler;
-import dev.astra.event.events.KeyEvent;
-
+import dev.astra.event.events.misc.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
@@ -81,6 +80,11 @@ public class ModuleManager {
     }
 
     public void registerModule(Module module) {
+        for (Module m : modules) {
+            if (m.getClass() == module.getClass()) {
+                return;
+            }
+        }
         modules.add(module);
     }
 

@@ -3,12 +3,10 @@ package dev.astra.command.impl;
 import dev.astra.Main;
 import dev.astra.command.Command;
 import dev.astra.util.ChatUtil;
-
 import java.util.ArrayList;
 import java.util.List;
 
 public class HelpCommand implements Command {
-
     @Override
     public String[] getAliases() {
         return new String[]{"help"};

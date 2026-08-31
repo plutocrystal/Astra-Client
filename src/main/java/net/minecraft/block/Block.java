@@ -326,6 +326,10 @@ public class Block {
     }
 
     public boolean isOpaqueCube() {
+        if (dev.astra.module.impl.render.Xray.shouldHide(this)) {
+            return false;
+        }
+
         return true;
     }
 

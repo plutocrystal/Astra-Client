@@ -1,6 +1,5 @@
 package net.minecraft.entity.player;
 
-import dev.astra.module.impl.movement.KeepSprint;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.mojang.authlib.GameProfile;
@@ -120,6 +119,10 @@ public abstract class EntityPlayer extends EntityLivingBase {
 
     public int getItemInUseCount() {
         return this.itemInUseCount;
+    }
+
+    public void setItemInUseCount(int count) {
+        this.itemInUseCount = count;
     }
 
     public boolean isUsingItem() {
@@ -945,14 +948,14 @@ public abstract class EntityPlayer extends EntityLivingBase {
                         if (i > 0) {
                             targetEntity.addVelocity(-MathHelper.sin(this.rotationYaw * (float) Math.PI / 180.0F) * (float) i * 0.5F, 0.1D, MathHelper.cos(this.rotationYaw * (float) Math.PI / 180.0F) * (float) i * 0.5F);
 
-                            if (this.isSprinting()) {
-                                double factor = KeepSprint.slowDown != null ? KeepSprint.slowDown.getValue() : 0.6D;
-                                this.motionX *= factor;
-                                this.motionZ *= factor;
+                            dev.astra.event.events.attack.KeepSprintEvent keepSprintEvent = new dev.astra.event.events.attack.KeepSprintEvent();
+                            dev.astra.Main.eventBus.post(keepSprintEvent);
+                            if (!keepSprintEvent.isCancelled()) {
+                                this.motionX *= 0.6D;
+                                this.motionZ *= 0.6D;
                                 this.setSprinting(false);
                             }
-                        }       
-
+                        }        
 
                         if (targetEntity instanceof EntityPlayerMP && targetEntity.velocityChanged) {
                             ((EntityPlayerMP) targetEntity).playerNetServerHandler.sendPacket(new S12PacketEntityVelocity(targetEntity));
@@ -1216,12 +1219,20 @@ public abstract class EntityPlayer extends EntityLivingBase {
         return this.sleeping;
     }
 
+    public void setSleeping(boolean sleeping) {
+        this.sleeping = sleeping;
+    }
+
     public boolean isPlayerFullyAsleep() {
         return this.sleeping && this.sleepTimer >= 100;
     }
 
     public int getSleepTimer() {
         return this.sleepTimer;
+    }
+
+    public void setSleepTimer(int sleepTimer) {
+        this.sleepTimer = sleepTimer;
     }
 
     public void addChatComponentMessage(IChatComponent chatComponent) {

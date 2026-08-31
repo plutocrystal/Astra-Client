@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class DefaultResourcePack implements IResourcePack {
-    public static final Set<String> defaultResourceDomains = ImmutableSet.of("minecraft", "realms");
+    public static final Set<String> defaultResourceDomains = ImmutableSet.of("minecraft", "realms", "astra.snd");
     private final Map<String, File> mapAssets;
 
     public DefaultResourcePack(Map<String, File> mapAssetsIn) {
@@ -42,7 +42,12 @@ public class DefaultResourcePack implements IResourcePack {
     }
 
     private InputStream getResourceStream(ResourceLocation location) {
-        String s = "/assets/" + location.getResourceDomain() + "/" + location.getResourcePath();
+        String s;
+        if ("astra.snd".equals(location.getResourceDomain())) {
+            s = "/assets/minecraft/astra/" + location.getResourcePath();
+        } else {
+            s = "/assets/" + location.getResourceDomain() + "/" + location.getResourcePath();
+        }
         InputStream inputstream = ReflectorForge.getOptiFineResourceStream(s);
         return inputstream != null ? inputstream : DefaultResourcePack.class.getResourceAsStream(s);
     }

@@ -1,5 +1,7 @@
 package net.minecraft.client.entity;
 
+import dev.astra.module.impl.render.CustomCape;
+import dev.astra.module.impl.render.CustomSkin;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.NetworkPlayerInfo;
@@ -64,14 +66,25 @@ public abstract class AbstractClientPlayer extends EntityPlayer {
         return networkplayerinfo != null && networkplayerinfo.hasLocationSkin();
     }
 
-    public ResourceLocation getLocationSkin() {  
-       NetworkPlayerInfo networkplayerinfo = this.getPlayerInfo();
-       return networkplayerinfo == null ? DefaultPlayerSkin.getDefaultSkin(this.getUniqueID()) : networkplayerinfo.getLocationSkin();
+    public ResourceLocation getLocationSkin() {
+        if (dev.astra.Main.moduleManager != null) {
+            CustomSkin customSkin =
+                    dev.astra.Main.moduleManager.getModuleByClass(CustomSkin.class);
+            if (customSkin != null && customSkin.isToggle() && customSkin.shouldApply(this)) {
+                net.minecraft.util.ResourceLocation customLoc = customSkin.getCurrentSkin();
+                if (customLoc != null) {
+                    return customLoc;
+                }
+            }
+        }
+
+        NetworkPlayerInfo networkplayerinfo = this.getPlayerInfo();
+        return networkplayerinfo == null ? DefaultPlayerSkin.getDefaultSkin(this.getUniqueID()) : networkplayerinfo.getLocationSkin();
     }
 
     public ResourceLocation getLocationCape() {
         if (dev.astra.Main.moduleManager != null) {
-            dev.astra.module.impl.render.CustomCape customCape = dev.astra.Main.moduleManager.getModuleByClass(dev.astra.module.impl.render.CustomCape.class);
+            CustomCape customCape = dev.astra.Main.moduleManager.getModuleByClass(CustomCape.class);
             if (customCape != null && customCape.isToggle() && this == net.minecraft.client.Minecraft.getMinecraft().thePlayer) {
                 net.minecraft.util.ResourceLocation customLoc = customCape.getCurrentCape();
                 if (customLoc != null) {
@@ -114,6 +127,14 @@ public abstract class AbstractClientPlayer extends EntityPlayer {
     }
 
     public String getSkinType() {
+        if (dev.astra.Main.moduleManager != null) {
+            CustomSkin customSkin =
+                    dev.astra.Main.moduleManager.getModuleByClass(CustomSkin.class);
+            if (customSkin != null && customSkin.isToggle() && customSkin.shouldApply(this)) {
+                return customSkin.getSkinType();
+            }
+        }
+
         NetworkPlayerInfo networkplayerinfo = this.getPlayerInfo();
         return networkplayerinfo == null ? DefaultPlayerSkin.getSkinType(this.getUniqueID()) : networkplayerinfo.getSkinType();
     }

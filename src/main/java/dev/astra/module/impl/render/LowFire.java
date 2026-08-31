@@ -6,8 +6,8 @@ import dev.astra.value.impl.NumberValue;
 import org.lwjgl.input.Keyboard;
 
 public class LowFire extends Module {
-
     public static LowFire INSTANCE;
+
     public static NumberValue height;
 
     public LowFire() {

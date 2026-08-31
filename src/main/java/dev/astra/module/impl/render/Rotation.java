@@ -5,7 +5,6 @@ import dev.astra.module.Module;
 import org.lwjgl.input.Keyboard;
 
 public class Rotation extends Module {
-
     public Rotation() {
         super("Rotation", Keyboard.KEY_NONE, Category.RENDER);
     }

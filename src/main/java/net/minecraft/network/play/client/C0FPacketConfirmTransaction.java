@@ -49,4 +49,8 @@ public class C0FPacketConfirmTransaction implements Packet<INetHandlerPlayServer
     public short getUid() {
         return this.uid;
     }
+
+    public boolean isAccepted() {
+        return this.accepted;
+    }
 }

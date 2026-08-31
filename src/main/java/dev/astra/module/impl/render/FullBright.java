@@ -1,7 +1,7 @@
 package dev.astra.module.impl.render;
 
 import dev.astra.event.EventHandler;
-import dev.astra.event.events.TickEvent;
+import dev.astra.event.events.misc.TickEvent;
 import dev.astra.module.Category;
 import dev.astra.module.Module;
 import dev.astra.value.impl.ModeValue;
@@ -10,13 +10,18 @@ import net.minecraft.potion.PotionEffect;
 import org.lwjgl.input.Keyboard;
 
 public class FullBright extends Module {
-
     public ModeValue mode = new ModeValue("Mode", "Gamma", "Gamma", "Potion");
+
     private float oldGamma;
 
     public FullBright() {
         super("FullBright", Keyboard.KEY_NONE, Category.RENDER);
         addValues(mode);
+    }
+
+    @Override
+    public String getStatus() {
+        return mode.getValue();
     }
 
     @Override
@@ -28,7 +33,6 @@ public class FullBright extends Module {
     @Override
     public void onDisable() {
         if (mc.thePlayer == null || mc.theWorld == null) return;
-        
         if (mode.getValue().equals("Gamma")) {
             mc.gameSettings.gammaSetting = oldGamma;
         } else if (mode.getValue().equals("Potion")) {
@@ -39,7 +43,6 @@ public class FullBright extends Module {
     @EventHandler
     public void onTick(TickEvent event) {
         if (mc.thePlayer == null || mc.theWorld == null) return;
-
         if (mode.getValue().equals("Gamma")) {
             mc.gameSettings.gammaSetting = 100.0F;
         } else if (mode.getValue().equals("Potion")) {

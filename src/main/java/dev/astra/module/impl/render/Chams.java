@@ -11,7 +11,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import org.lwjgl.input.Keyboard;
 
 public class Chams extends Module {
-
     public static Chams INSTANCE;
 
     public Chams() {
@@ -22,11 +21,9 @@ public class Chams extends Module {
     public boolean isValid(Entity entity) {
         if (!(entity instanceof EntityLivingBase)) return false;
         if (entity == mc.thePlayer) return false;
-
         EntityLivingBase e = (EntityLivingBase) entity;
         boolean isDead = e.isDead || e.getHealth() <= 0 || e.deathTime > 0;
         if (isDead && !Target.dead.getValue()) return false;
-
         if (e instanceof EntityPlayer) {
             if (!Target.players.getValue()) return false;
         } else if (e instanceof EntityMob) {
@@ -36,9 +33,7 @@ public class Chams extends Module {
         } else {
             return false;
         }
-
         if (e.isInvisible() && !Target.invisible.getValue()) return false;
-
         return true;
     }
 }

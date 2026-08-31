@@ -1,7 +1,8 @@
 package net.minecraft.client.renderer;
 
 import dev.astra.Main;
-import dev.astra.event.events.EventRenderItem;
+import dev.astra.event.events.render.RenderItemEvent;
+import dev.astra.module.impl.combat.killaura.KillAura;
 import dev.astra.module.impl.render.Animations;
 import dev.astra.module.impl.render.LowFire;
 import dev.astra.module.impl.render.NoRender;
@@ -298,20 +299,50 @@ public class ItemRenderer {
 
             Animations animationsModule = Main.moduleManager != null ? Main.moduleManager.getModuleByClass(Animations.class) : null;
             boolean animationsEnabled = animationsModule != null && animationsModule.isToggle();
+            boolean leftHand = animationsEnabled && animationsModule.leftHand.getValue();
+            if (leftHand) {
+                GlStateManager.scale(-1.0F, 1.0F, 1.0F);
+                GlStateManager.disableCull();
+            }
             boolean isNotVanilla = animationsEnabled && !animationsModule.mode.getValue().equals("Vanilla");
+            boolean blockAnything = animationsEnabled
+                    && animationsModule.blockAnything.getValue()
+                    && abstractclientplayer.getItemInUseCount() <= 0
+                    && mc.currentScreen == null
+                    && mc.gameSettings.keyBindUseItem.isKeyDown();
+
+            boolean blockingState = animationsEnabled && animationsModule.isBlockState();
 
             if (animationsEnabled) {
-                GlStateManager.translate(animationsModule.x.getValue().floatValue(), animationsModule.y.getValue().floatValue(), animationsModule.z.getValue().floatValue());
-                GlStateManager.rotate(animationsModule.rotX.getValue().floatValue(), 1.0F, 0.0F, 0.0F);
-                GlStateManager.rotate(animationsModule.rotY.getValue().floatValue(), 0.0F, 1.0F, 0.0F);
-                GlStateManager.rotate(animationsModule.rotZ.getValue().floatValue(), 0.0F, 0.0F, 1.0F);
+                if (blockingState) {
+                    GlStateManager.translate(animationsModule.blockX.getValue().floatValue(), animationsModule.blockY.getValue().floatValue(), animationsModule.blockZ.getValue().floatValue());
+                    GlStateManager.rotate(animationsModule.blockRotX.getValue().floatValue(), 1.0F, 0.0F, 0.0F);
+                    GlStateManager.rotate(animationsModule.blockRotY.getValue().floatValue(), 0.0F, 1.0F, 0.0F);
+                    GlStateManager.rotate(animationsModule.blockRotZ.getValue().floatValue(), 0.0F, 0.0F, 1.0F);
+                } else {
+                    GlStateManager.translate(animationsModule.heldX.getValue().floatValue(), animationsModule.heldY.getValue().floatValue(), animationsModule.heldZ.getValue().floatValue());
+                    GlStateManager.rotate(animationsModule.heldRotX.getValue().floatValue(), 1.0F, 0.0F, 0.0F);
+                    GlStateManager.rotate(animationsModule.heldRotY.getValue().floatValue(), 0.0F, 1.0F, 0.0F);
+                    GlStateManager.rotate(animationsModule.heldRotZ.getValue().floatValue(), 0.0F, 0.0F, 1.0F);
+                }
             }
+
+            float itemScale = animationsEnabled ? (blockingState ? animationsModule.blockSize.getValue().floatValue() : animationsModule.heldSize.getValue().floatValue()) : 1.0F;
 
             if (this.itemToRender != null) {
                 if (this.itemToRender.getItem() instanceof ItemMap) {
+                    if (leftHand) {
+                        GlStateManager.disableCull();
+                    }
                     this.renderItemMap(abstractclientplayer, f2, f, f1);
-                } else if (abstractclientplayer.getItemInUseCount() > 0) {
+                    if (leftHand) {
+                        GlStateManager.enableCull();
+                    }
+                } else if (abstractclientplayer.getItemInUseCount() > 0 || KillAura.shouldFakeBlock(this.itemToRender) || blockAnything) {
                     EnumAction enumaction = this.itemToRender.getItemUseAction();
+                    if (blockAnything && enumaction != EnumAction.BLOCK) {
+                        enumaction = EnumAction.BLOCK;
+                    }
 
                     switch (enumaction) {
                         case NONE:
@@ -330,7 +361,7 @@ public class ItemRenderer {
 
                         case BLOCK:
                             if (animationsEnabled) {
-                                Main.eventBus.post(new EventRenderItem(f, f1));
+                                Main.eventBus.post(new RenderItemEvent(f, f1));
                             } else {
                                 this.transformFirstPersonItem(f, 0.0F);
                                 this.doBlockTransformations();
@@ -347,13 +378,36 @@ public class ItemRenderer {
                             break;
                     }
                 } else {
-                    this.doItemUsedTransformations(f1);
-                    this.transformFirstPersonItem(f, f1);
+                    boolean swingHandled = animationsEnabled && animationsModule.applySwing(f, f1);
+                    if (!swingHandled) {
+                        this.doItemUsedTransformations(f1);
+                        this.transformFirstPersonItem(f, f1);
+                    }
                 }
 
-                this.renderItem(abstractclientplayer, this.itemToRender, ItemCameraTransforms.TransformType.FIRST_PERSON);
+                if (leftHand) {
+                    GlStateManager.disableCull();
+                }
+                if (itemScale != 1.0F) {
+                    GlStateManager.pushMatrix();
+                    GlStateManager.scale(itemScale, itemScale, itemScale);
+                    this.renderItem(abstractclientplayer, this.itemToRender, ItemCameraTransforms.TransformType.FIRST_PERSON);
+                    GlStateManager.popMatrix();
+                } else {
+                    this.renderItem(abstractclientplayer, this.itemToRender, ItemCameraTransforms.TransformType.FIRST_PERSON);
+                }
+                if (leftHand) {
+                    GlStateManager.enableCull();
+                }
             } else if (!abstractclientplayer.isInvisible()) {
-                this.renderPlayerArm(abstractclientplayer, f, f1);
+                if (itemScale != 1.0F) {
+                    GlStateManager.pushMatrix();
+                    GlStateManager.scale(itemScale, itemScale, itemScale);
+                    this.renderPlayerArm(abstractclientplayer, f, f1);
+                    GlStateManager.popMatrix();
+                } else {
+                    this.renderPlayerArm(abstractclientplayer, f, f1);
+                }
             }
 
             GlStateManager.popMatrix();
@@ -365,9 +419,7 @@ public class ItemRenderer {
     public void renderOverlays(float partialTicks) {
         GlStateManager.disableAlpha();
 
-        boolean noRenderEnabled = Main.moduleManager != null && Main.moduleManager.getModuleByClass(NoRender.class) != null && Main.moduleManager.getModuleByClass(NoRender.class).isToggle();
-
-        if (!noRenderEnabled && this.mc.thePlayer.isEntityInsideOpaqueBlock()) {
+        if (!dev.astra.module.impl.render.NoRender.shouldHideBlockOverlay() && this.mc.thePlayer.isEntityInsideOpaqueBlock()) {
             IBlockState iblockstate = this.mc.theWorld.getBlockState(new BlockPos(this.mc.thePlayer));
             BlockPos blockpos = new BlockPos(this.mc.thePlayer);
             EntityPlayer entityplayer = this.mc.thePlayer;
@@ -395,11 +447,11 @@ public class ItemRenderer {
         }
 
         if (!this.mc.thePlayer.isSpectator()) {
-            if (this.mc.thePlayer.isInsideOfMaterial(Material.water) && !Reflector.callBoolean(Reflector.ForgeEventFactory_renderWaterOverlay, this.mc.thePlayer, Float.valueOf(partialTicks))) {
+            if (this.mc.thePlayer.isInsideOfMaterial(Material.water) && !dev.astra.module.impl.render.NoRender.hideWaterOverlay() && !Reflector.callBoolean(Reflector.ForgeEventFactory_renderWaterOverlay, this.mc.thePlayer, Float.valueOf(partialTicks))) {
                 this.renderWaterOverlayTexture(partialTicks);
             }
 
-            if (this.mc.thePlayer.isBurning() && !Reflector.callBoolean(Reflector.ForgeEventFactory_renderFireOverlay, this.mc.thePlayer, Float.valueOf(partialTicks))) {
+            if (this.mc.thePlayer.isBurning() && !dev.astra.module.impl.render.NoRender.hideFireOverlay() && !Reflector.callBoolean(Reflector.ForgeEventFactory_renderFireOverlay, this.mc.thePlayer, Float.valueOf(partialTicks))) {
                 this.renderFireInFirstPerson(partialTicks);
             }
         }
@@ -531,6 +583,10 @@ public class ItemRenderer {
         } else flag = this.itemToRender != null || itemstack != null;
 
         float f2 = 0.4F;
+        Animations animationsModule = Main.moduleManager != null ? Main.moduleManager.getModuleByClass(Animations.class) : null;
+        if (animationsModule != null && animationsModule.isBlockState()) {
+            f2 = Math.max(0.02F, f2 * (1.0F + animationsModule.blockSpeed.getValue().floatValue() / 100.0F));
+        }
         float f = flag ? 0.0F : 1.0F;
         float f1 = MathHelper.clamp_float(f - this.equippedProgress, -f2, f2);
         this.equippedProgress += f1;
