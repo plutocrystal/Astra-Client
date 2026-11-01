@@ -1,0 +1,32 @@
+{
+    "astra.sigma.enable": {
+        "category": "master",
+        "sounds": [
+            { "name": "astra.snd:sigma/enable", "stream": false }
+        ]
+    },
+    "astra.sigma.disable": {
+        "category": "master",
+        "sounds": [
+            { "name": "astra.snd:sigma/disable", "stream": false }
+        ]
+    },
+    "astra.fdp.enable": {
+        "category": "master",
+        "sounds": [
+            { "name": "astra.snd:fdp/enable", "stream": false }
+        ]
+    },
+    "astra.fdp.disable": {
+        "category": "master",
+        "sounds": [
+            { "name": "astra.snd:fdp/disable", "stream": false }
+        ]
+    },
+    "astra.button.click": {
+        "category": "master",
+        "sounds": [
+            { "name": "astra.snd:buttonClick", "stream": false }
+        ]
+    }
+}
